@@ -5,7 +5,7 @@ import time
 from utils import *
 from argparse import ArgumentParser
 
-def MODIS_Data_Preprocessing(year, product, num_threads):
+def MODIS_Data_Preprocessing(year, product):
     sensor        = product.split(".")[0]
     root_dir      = 'MODIS/MOD_{}_{}'.format(year,sensor)
     hdfs_path     = os.path.join(root_dir, 'hdfs_files')
@@ -62,4 +62,4 @@ if __name__ == "__main__":
     num_threads = 4
     for year in years:
         for product in products:
-            MODIS_Data_Preprocessing(year, product, num_threads)
+            MODIS_Data_Preprocessing(year, product)
