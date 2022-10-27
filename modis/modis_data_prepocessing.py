@@ -2,7 +2,7 @@ import os
 # from pymodis import downmodis
 import numpy as np
 import time
-from utils import *
+from utility import *
 from argparse import ArgumentParser
 
 def MODIS_Data_Preprocessing(year, product):
