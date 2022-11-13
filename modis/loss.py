@@ -1,14 +1,17 @@
 # File for defining the loss function
 import torch.nn.functional as F
+from torchmetrics.functional import mean_squared_error
 import torch
 
 class GradientLoss():
-    def __init__(self, device)
+    def __init__(self, device, alpha=1)
         self.kernel_x = [[-1., 0., 1.], [-2., 0., 2.], [-1., 0., 1.]]
         self.kernel_x = torch.FloatTensor(kernel_x).unsqueeze(0).unsqueeze(0).to(device)
         
         self.kernel_y = [[-1., 0., 1.], [-2., 0., 2.], [-1., 0., 1.]]
         self.kernel_y = torch.FloatTensor(kernel_y).unsqueeze(0).unsqueeze(0).to(device)
+
+        self.alpha = alpha
 
     def get_gradient(self, img):
         # Compute the gradient for an image using the sobel operator  
@@ -23,7 +26,11 @@ class GradientLoss():
         # Original loss function 
         # mse_img = ((disp - img)**2).mean()
 
-        get_gradient(prediction)
-        get_gradient(nvdi_img)
+        # Mean gradient error
+        MGE = mean_squared_error(get_gradient(prediction), get_gradient(nvdi_img))
+        # Mean squared error
+        MSE = mean_squared_error(t_img, upscale()
 
-        return mse_img
+
+
+        return MGE + self.alpha * MSE

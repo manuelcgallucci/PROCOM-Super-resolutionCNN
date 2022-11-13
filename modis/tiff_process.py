@@ -7,9 +7,6 @@ def tiff_process(data_path, cores = 4):
     """
     Function to read from memory the tif files of the day and night images
     """
-    
-    count = 0
-
     start = time.time()
 
     tifs = os.listdir(data_path)
