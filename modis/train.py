@@ -30,9 +30,10 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 model = MRUNet(res_down=True, n_resblocks=1, bilinear=0).to(device)
 
 scale = 4
-core = 4
+n_cores = 4
+
 # Tiff process
-Y_day, Y_night = tiff_process(args.datapath)
+Y_day, Y_night = tiff_process(args.datapath, cores=n_cores)
 Y = np.concatenate((Y_day, Y_night),axis=0)
 Y_new = pymp.shared.list()
 
@@ -53,7 +54,7 @@ y_val = Y_new[int(Y_new.shape[0]*ratio):]
 
 # DATA AUGMENTATION FOR TRAINING LABEL
 y_train_new = pymp.shared.list()
-with pymp.Parallel(core) as p:
+with pymp.Parallel(n_cores) as p:
   for i in p.range(y_train.shape[0]):
     y_train_new.append(y_train[i])
     y_train_new.append(np.flip(y_train[i], 1))
@@ -66,14 +67,14 @@ x_train = pymp.shared.array((y_train.shape))
 x_val = pymp.shared.array((y_val.shape))
 
 # PREPROCESS TO CREATE BICUBIC VERSION FOR MODEL INPUT
-with pymp.Parallel(core) as p:
+with pymp.Parallel(n_cores) as p:
   for i in p.range(y_train.shape[0]):
     y_tr = y_train[i]
     a = downsampling(y_tr, scale)
     x_train[i,:,:] = upsampling(a , scale)
     x_train[i,:,:] = normalization(x_train[i,:,:], max_val)
 
-with pymp.Parallel(core) as p:
+with pymp.Parallel(n_cores) as p:
   for i in p.range(y_val.shape[0]):
     y_te = y_val[i]
     a = downsampling(y_te, scale)

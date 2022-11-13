@@ -35,7 +35,7 @@ def MODIS_Data_Preprocessing(year, product, num_threads):
         elif sensor=='MOD13A2':
             crop_modis_MOD13A2(hdf_path, hdf,tifs_1km_path, 64, (64,64))
         # NVDI 250m images
-        elif sensor == "MOD13Q1.061":
+        elif sensor == "MOD13Q1":
             crop_modis_MOD13Q1(hdf_path, hdf,tifs_250m_path, 64, (64,64))
 
     print("Using {:.4f}s to process product = {}".format(time.time()-start_time, product))
@@ -47,8 +47,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     years = list(np.arange(args.year_begin, args.year_end))
-    # LST: "MOD11A1.061", NDVI: "MOD13A2.061"
-    products = ["MOD11A1.061","MOD13A2.061"] 
+    # LST: "MOD11A1.061", NDVI: "MOD13A2.061" NVDI 250 m: MOD13Q1.061
+    products = ["MOD11A1.061","MOD13Q1.061"] 
     # tiles to download, France is in h17v04 and h18v04 , string of tiles separated by comma
     tiles = "h18v04"
     # Cores number to use     
