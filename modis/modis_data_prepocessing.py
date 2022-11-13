@@ -5,18 +5,16 @@ import time
 from utility import *
 from argparse import ArgumentParser
 
-def MODIS_Data_Preprocessing(year, product):
+def MODIS_Data_Preprocessing(year, product, num_threads):
     sensor        = product.split(".")[0]
     root_dir      = 'MODIS/MOD_{}_{}'.format(year,sensor)
     hdfs_path     = os.path.join(root_dir, 'hdfs_files')
     tifs_1km_path = os.path.join(root_dir, 'tifs_files/1km')
-    tifs_2km_path = os.path.join(root_dir, 'tifs_files/2km')
-    tifs_4km_path = os.path.join(root_dir, 'tifs_files/4km')
-
+    tifs_250m_path = os.path.join(root_dir, 'tifs_files/250m')
+    
     os.makedirs(hdfs_path,exist_ok=1)
     os.makedirs(tifs_1km_path,exist_ok=1)
-    os.makedirs(tifs_2km_path,exist_ok=1)
-    os.makedirs(tifs_4km_path,exist_ok=1)
+    os.makedirs(tifs_250m_path,exist_ok=1)
 
     print("start to processing {}".format(hdfs_path))
     hdfs = os.listdir(hdfs_path)
@@ -30,20 +28,15 @@ def MODIS_Data_Preprocessing(year, product):
         hdf = hdfs[index]
         if not hdf.endswith('hdf'): continue
         hdf_path = os.path.join(hdfs_path,hdf)
+        # LST images
         if sensor=='MOD11A1':
-            # try:
-                crop_modis(hdf_path, hdf,tifs_1km_path, tifs_2km_path,tifs_4km_path, 64, (64,64))
-            # except:
-                # shutil.rmtree(hdf_path)
-                # print("problem", hdf_path)
-                # pass
+            crop_modis(hdf_path, hdf,tifs_1km_path, 64, (64,64))
+        # NVDI 1k images
         elif sensor=='MOD13A2':
-            # try:
-                crop_modis_MOD13A2(hdf_path, hdf,tifs_1km_path, tifs_2km_path,tifs_4km_path, 64, (64,64))
-            # except:
-                # shutil.rmtree(hdf_path)
-                # print("problem", hdf_path)
-                # pass
+            crop_modis_MOD13A2(hdf_path, hdf,tifs_1km_path, 64, (64,64))
+        # NVDI 250m images
+        elif sensor == "MOD13Q1.061":
+            crop_modis_MOD13Q1(hdf_path, hdf,tifs_250m_path, 64, (64,64))
 
     print("Using {:.4f}s to process product = {}".format(time.time()-start_time, product))
 
@@ -62,4 +55,4 @@ if __name__ == "__main__":
     num_threads = 4
     for year in years:
         for product in products:
-            MODIS_Data_Preprocessing(year, product)
+            MODIS_Data_Preprocessing(year, product, num_threads)

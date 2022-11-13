@@ -34,7 +34,6 @@ def norm4_f4(a,axis):
 
 	return result
 
-
 def sliding_window(img, step, window_size):
 	"""
 	INPUT:
@@ -169,7 +168,7 @@ def read_modis(in_file):
 	return LST_K_day, LST_K_night, cols, rows, projection, geotransform
 
 
-def crop_modis(hdf_path, hdf_name, save_dir, save_dir_downsample_2, save_dir_downsample_4,step=64,size=(64,64)):
+def crop_modis(hdf_path, hdf_name, save_dir,step=64,size=(64,64)):
 	"""
 	INPUT:
 	hdf_path = input image path to be cropped | or hdf file path ("/a/b/c.hdf")
@@ -229,44 +228,13 @@ def crop_modis(hdf_path, hdf_name, save_dir, save_dir_downsample_2, save_dir_dow
 		save_path = os.path.join(save_dir,img_cropped_names[i])
 		succes = save_tif(save_path, img_days[i], img_nights[i], cols2, rows2, projection, geotransform2s[i])
 
-		if succes:
-			save_path_downsample_2 = os.path.join(save_dir_downsample_2,img_cropped_names[i])
-			save_path_downsample_4 = os.path.join(save_dir_downsample_4,img_cropped_names[i])
 
-			img_day_downsample_2 = skimage.measure.block_reduce(img_days[i],(2,2),norm4_f2)
-			img_night_downsample_2 = skimage.measure.block_reduce(img_nights[i],(2,2),norm4_f2)
-			img_day_downsample_4 = skimage.measure.block_reduce(img_days[i],(4,4),norm4_f4)
-			img_night_downsample_4 = skimage.measure.block_reduce(img_nights[i],(4,4),norm4_f4)
-
-			_ = save_tif(save_path_downsample_2, img_day_downsample_2, img_night_downsample_2, cols2, rows2, projection, geotransform2s[i])
-			_ = save_tif(save_path_downsample_4, img_day_downsample_4, img_night_downsample_4, cols2, rows2, projection, geotransform2s[i])
-
-			# print("img_night_downsample",img_night_downsample)
-			# # Display image
-			# tif_1km_path = save_path
-			# tif_2km_path = save_path_downsample
-			# LST_K_day_1km, LST_K_night_1km, cols_1km, rows_1km, projection_1km, geotransform_1km = read_tif(tif_1km_path)
-			# LST_K_day_2km, LST_K_night_2km, cols_2km, rows_2km, projection_2km, geotransform_2km = read_tif(tif_2km_path)
-
-			# plt.figure()
-			# plt.subplot(121)
-			# plt.imshow(LST_K_day_1km)
-			# plt.clim(260,301)
-			# plt.colorbar()
-			# plt.title("1km")
-			# plt.subplot(122)
-			# plt.imshow(LST_K_day_2km)
-			# plt.clim(260,301)
-			# plt.colorbar()
-			# plt.title("2km")
-			# plt.show()
-		else:
-			# print("Not success!")
-			pass
-
+def crop_modis_MOD13Q1(hdf_path, hdf,tifs_250m_path,step=64,size=(64,64)):
+    #TODO
+    return 
 
 def save_tif_MOD13A2(out_file, red_downsample, NIR_downsample, MIR_downsample, cols, rows, projection, geotransform):
-# def save_tif(out_file, LST_K_day, LST_K_night, cols, rows, projection, geotransform):
+    # def save_tif(out_file, LST_K_day, LST_K_night, cols, rows, projection, geotransform):
 
 	# Eliminate the clouds' pixel
 	num_px = red_downsample.shape[0]*red_downsample.shape[1]
@@ -487,7 +455,6 @@ def psnr_notorch(label, outputs):
         PSNR = 20 * np.log10((np.max(label) - np.min(label)) / rmse)
         return PSNR, rmse
 
-
 def ssim(label, outputs, max_val):
     label = label.cpu().detach().numpy()
     outputs = outputs.cpu().detach().numpy()*max_val
@@ -496,7 +463,6 @@ def ssim(label, outputs, max_val):
       ssim_img = ssim_sk(label[i,0,:,:], outputs[i,0,:,:], data_range=label.max()-label.min())
       ssim_batch.append(ssim_img)
     return np.array(ssim_batch).mean()
-
 
 def ssim_notorch(label, outputs):
     ssim_map = ssim_sk(label, outputs, data_range=label.max() - label.min())
@@ -514,28 +480,28 @@ def linear_fit_test(path_index, path_temperature, min_T, path_fit, plot, path_pl
     import numpy as np
     from scipy.stats import linregress
     import matplotlib.pyplot as plt
-################### INDEX ##########################################
+    ################### INDEX ##########################################
     
-# Reading index data
+    # Reading index data
 
     cols = path_index.shape[0] #Spatial dimension x
     rows = path_index.shape[1] #Spatial dimension y
 
-# Read as array the index
+    # Read as array the index
     index = path_index
 
-################### Temperature ######################################
+    ################### Temperature ######################################
 
-# Reading temperature data
+    # Reading temperature data
 
     cols_t = path_temperature.shape[0] #Spatial dimension x
     rows_t = path_temperature.shape[1] #Spatial dimension y
 
-# Read as array
+    # Read as array
     Temp= path_temperature
 
 
-########### PROCESSED VERSION OF T AND I AND LINEAR REGRESSION #######
+    ########### PROCESSED VERSION OF T AND I AND LINEAR REGRESSION #######
 
     T=Temp.flatten()
 
@@ -550,21 +516,21 @@ def linear_fit_test(path_index, path_temperature, min_T, path_fit, plot, path_pl
     # I=I[NaN]
     # T=T[NaN]
     
-# Two different linear regressions
+    # Two different linear regressions
 
     fit = np.polyfit(I,T,1)
     fit_fn = np.poly1d(fit) 
     fit2=linregress(I,T)
     
-###################################################################
-########### SAVING RESULTS ########################################
-###################################################################
+    ###################################################################
+    ########### SAVING RESULTS ########################################
+    ###################################################################
                 
     np.savetxt(path_fit,(fit2[0],fit2[1],fit2[2],fit2[3],fit2[4]),fmt='%3.6f')    
 
-###################################################################
-########### PLOT ##################################################
-###################################################################
+    ###################################################################
+    ########### PLOT ##################################################
+    ###################################################################
 
     if plot == 1: 
         
@@ -585,7 +551,6 @@ def linear_fit_test(path_index, path_temperature, min_T, path_fit, plot, path_pl
     # print("index",index.shape)
     # print("Temp",Temp.shape)
     return
-
 
 
 def linear_unmixing_test(path_index, path_temperature, path_fit, iscale, path_mask, path_out):
