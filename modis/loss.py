@@ -5,13 +5,15 @@ from utility import downsampling
 
 class MixedGradientLoss():
     def __init__(self, device, alpha=1):
+        # Kernels defined for the gradient
         self.kernel_x = [[-1., 0., 1.], [-2., 0., 2.], [-1., 0., 1.]]
         self.kernel_x = torch.FloatTensor(self.kernel_x).unsqueeze(0).unsqueeze(0).to(device)
-        
         self.kernel_y = [[-1., 0., 1.], [-2., 0., 2.], [-1., 0., 1.]]
         self.kernel_y = torch.FloatTensor(self.kernel_y).unsqueeze(0).unsqueeze(0).to(device)
 
+        # Parameters of the loss function
         self.alpha = alpha
+
 
     def get_gradient(self, img):
         # Compute the gradient for an image using the sobel operator  
@@ -33,6 +35,7 @@ class MixedGradientLoss():
 
 
 '''
+# Main to test the MixedGradientLoss 
 if __name__ == "__main__":
     loss = MixedGradientLoss("cpu", alpha=1)
 
