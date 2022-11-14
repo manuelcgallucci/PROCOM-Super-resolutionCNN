@@ -3,7 +3,7 @@ from pymodis import downmodis
 import numpy as np
 import pymp
 import time
-from utils import *
+from utility import *
 from argparse import ArgumentParser
 
 def MODIS_Parallel_Downloader(year,product, num_threads, user="projet3a", password="Projet3AIMT"):
