@@ -226,8 +226,6 @@ def crop_modis(hdf_path, hdf_name, save_dir,step=64,size=(64,64)):
     for i in range(len(img_cropped_names)):
         save_path = os.path.join(save_dir,img_cropped_names[i])
         succes = save_tif(save_path, img_days[i], img_nights[i], cols2, rows2, projection, geotransform2s[i])
-        if(succes == True):
-            print(True)
 
 
 def save_tif_MOD13A2(out_file, red_downsample, NIR_downsample, MIR_downsample, cols, rows, projection, geotransform):
