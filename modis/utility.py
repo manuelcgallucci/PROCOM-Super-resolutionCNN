@@ -417,7 +417,7 @@ def crop_modis_MOD13Q1(hdf_path, hdf_name,tifs_250m_path,step=4*64,size=(256,256
         return
 
     red, NIR, MIR, cols, rows, projection, geotransform = read_modis_MOD13A2(hdf_path)
-    print(rows,cols)
+    #print(rows,cols)
 
     reds = []
     NIRs = []
