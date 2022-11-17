@@ -50,6 +50,14 @@ def sliding_window(img, step, window_size):
         for x in range(0, img.shape[1], step):
             yield (x, y, img[y:y + window_size[1], x:x + window_size[0]])
 
+def sliding_window_index(img,step,window_size,i):
+    count = 0
+    for y in range(0, img.shape[0], step):
+        for x in range(0, img.shape[1], step):
+            if count == i :
+                return (x, y, img[y:y + window_size[1], x:x + window_size[0]])
+            count += 1
+
 def read_tif(in_file):
     """
     Similar to read_modis but this function is for reading output .tif file from
@@ -284,59 +292,47 @@ def crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,i):
 
     red, NIR, MIR, cols, rows, projection, geotransform = read_modis_MOD13A2(hdf_path)
     
-    reds = []
-    NIRs = []
-    MIRs = []
-    img_cropped_names = []
-    geotransform2s = []
     cols2, rows2 = size
 
     if red is None or NIR is None or MIR is None:
         print("Cannot handle this MODIS file: ", hdf_path, ". Please check it again")
+
     # For day image
-    win_count = 0
-    for (x,y,window) in sliding_window(red, step, size):
-        if window.shape[0] != size[0] or window.shape[1] != size[1]:
-                continue
+    x,y,window = sliding_window_index(red, step, size,i)
+    if window.shape[0] != size[0] or window.shape[1] != size[1]:
+        return False
 
-        img_cropped = window
-        geotransform2 = np.asarray(geotransform)
-        geotransform2[0] = geotransform[0]+x*geotransform[1] # 1st coordinate of top left pixel of the image 
-        geotransform2[3] = geotransform[3]+y*geotransform[5] # 2nd coordinate of top left pixel of the image
-        geotransform2=tuple(geotransform2)
+    img_cropped = window
+    geotransform2 = np.asarray(geotransform)
+    geotransform2[0] = geotransform[0]+x*geotransform[1] # 1st coordinate of top left pixel of the image 
+    geotransform2[3] = geotransform[3]+y*geotransform[5] # 2nd coordinate of top left pixel of the image
+    geotransform2=tuple(geotransform2)
 
-        reds.append(img_cropped)
-        geotransform2s.append(geotransform2)
+    reds=  img_cropped
+    geotransform2s= geotransform2
         
-        win_count += 1
-    # print("Number of cropped day images", win_count)
-    
     # For NIR image
-    win_count = 0
-    for (x,y,window) in sliding_window(NIR, step, size):
-        if window.shape[0] != size[0] or window.shape[1] != size[1]:
-                continue
-        img_cropped = window
-        # np.save(save_path,img_cropped)
-        NIRs.append(img_cropped)
-        win_count += 1
+    x,y,window = sliding_window_index(NIR, step, size,i)
+    if window.shape[0] != size[0] or window.shape[1] != size[1]:
+            return False
+    img_cropped = window
+    # np.save(save_path,img_cropped)
+    NIRs = img_cropped
 
     # For MIR image
-    win_count = 0
-    for (x,y,window) in sliding_window(MIR, step, size):
-        if window.shape[0] != size[0] or window.shape[1] != size[1]:
-                continue
-        img_cropped = window
-        # np.save(save_path,img_cropped)
-        MIRs.append(img_cropped)
-        win_count += 1
+    x,y,window = sliding_window_index(MIR, step, size,i)
+    if window.shape[0] != size[0] or window.shape[1] != size[1]:
+            return False
+    img_cropped = window
+    # np.save(save_path,img_cropped)
+    MIRs = img_cropped
 
     # Save images and metadata into .tif file
     image_name_list = image_name.split(".")
     image_name_list[0] = "MOD13Q1"
     save_name = '.'.join(image_name_list)
     save_path = os.path.join(ndvi_save_path,save_name)
-    succes = save_tif_MOD13A2(save_path, reds[i], NIRs[i], MIRs[i], cols2, rows2, projection, geotransform2s[i])
+    succes = save_tif_MOD13A2(save_path, reds, NIRs, MIRs, cols2, rows2, projection, geotransform2s)
     return succes
 
 
