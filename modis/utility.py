@@ -260,13 +260,13 @@ def save_corresponding_ndvi(ndvi_save_path,ndvi_dir,image_name,cut):
 
     #Save the corresponding part of the correct NDVI image
     ndvi_hdf_path = os.path.join(ndvi_dir, ndvi_hdfs[required_index])
-    success = crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,i)
+    success = crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,required_index)
 
     while ( success != True and len(ndvi_list) != 0) :
         del ndvi_list[required_index]
         required_index = min(range(len(ndvi_list)), key=lambda i: abs(ndvi_list[i]-lst_day))
         ndvi_hdf_path = os.path.join(ndvi_dir, ndvi_hdfs[required_index])
-        success = crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,i)
+        success = crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,required_index)
 
     return
 
