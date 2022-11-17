@@ -167,7 +167,7 @@ def read_modis(in_file):
     # return LST_K_day, LST_K_night
     return LST_K_day, LST_K_night, cols, rows, projection, geotransform
 
-def crop_modis(hdf_path, hdf_name, save_dir,step=64,size=(64,64)):
+def crop_modis(hdf_path, hdf_name, save_dir,ndvi_save_path,ndvi_dir,step=64,size=(64,64)):
     """
     INPUT:
     hdf_path = input image path to be cropped | or hdf file path ("/a/b/c.hdf")
@@ -190,13 +190,15 @@ def crop_modis(hdf_path, hdf_name, save_dir,step=64,size=(64,64)):
     if img_day is None or img_night is None:
         print("Cannot handle this MODIS file: ", hdf_path, ". Please check it again")
         return
+
+    hdf_name_list = hdf_name.split(".")
     # For day image
     win_count = 0
     for (x,y,window) in sliding_window(img_day, step, size):
             if window.shape[0] != size[0] or window.shape[1] != size[1]:
                     continue
 
-            img_cropped_name = hdf_name + ".{}.tif".format(str(win_count).zfill(4))
+            img_cropped_name = hdf_name_list[0] + "." + hdf_name_list[1] + ".{}.tif".format(str(win_count).zfill(4))
             img_cropped = window
             geotransform2 = np.asarray(geotransform)
             geotransform2[0] = geotransform[0]+x*geotransform[1] # 1st coordinate of top left pixel of the image 
@@ -226,6 +228,116 @@ def crop_modis(hdf_path, hdf_name, save_dir,step=64,size=(64,64)):
     for i in range(len(img_cropped_names)):
         save_path = os.path.join(save_dir,img_cropped_names[i])
         succes = save_tif(save_path, img_days[i], img_nights[i], cols2, rows2, projection, geotransform2s[i])
+        if(succes):
+            save_corresponding_ndvi(ndvi_save_path,ndvi_dir,img_cropped_names[i],i)
+
+def save_corresponding_ndvi(ndvi_save_path,ndvi_dir,image_name,cut):
+    ndvi_hdfs =  os.listdir(ndvi_dir)
+    indexes_to_delete=[]
+    for index in range(len(ndvi_hdfs)):
+        if not ndvi_hdfs[index].endswith('hdf'):
+            indexes_to_delete.append(index)
+    for j in sorted(indexes_to_delete,reverse=True):
+        del ndvi_hdfs[j]
+    ndvi_hdfs.sort()
+
+    #Build the list of days that the ndvis were shot at
+    ndvi_list=[]
+    for i in range(len(ndvi_hdfs)):
+        ndvi_list.append(int(ndvi_hdfs[i].split(".")[1][4:]))
+
+    #Get the closest match to the day of our lst
+    lst_day = int(image_name.split(".")[1][4:])
+    required_index = min(range(len(ndvi_list)), key=lambda i: abs(ndvi_list[i]-lst_day))
+
+    #Save the corresponding part of the correct NDVI image
+    ndvi_hdf_path = os.path.join(ndvi_dir, ndvi_hdfs[required_index])
+    success = crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,i)
+
+    while ( success != True and len(ndvi_list) != 0) :
+        del ndvi_list[required_index]
+        required_index = min(range(len(ndvi_list)), key=lambda i: abs(ndvi_list[i]-lst_day))
+        ndvi_hdf_path = os.path.join(ndvi_dir, ndvi_hdfs[required_index])
+        success = crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,i)
+
+    return
+
+def crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,i):
+    hdf_path=ndvi_hdf_path
+    if not ndvi_hdf_path.endswith('hdf'): 
+        print("Not hdf file Sorry!")
+        return 
+
+    img_day, img_night, cols, rows, projection, geotransform = read_modis(ndvi_hdf_path)
+    
+    img_days = []
+    img_nights = []
+    img_cropped_names = []
+    geotransform2s = []
+    size = (256,256)
+    step = 256
+    cols2, rows2 = size
+
+    if img_day is None or img_night is None:
+        print("Cannot handle this MODIS file: ", hdf_path, ". Please check it again")
+        return
+
+    red, NIR, MIR, cols, rows, projection, geotransform = read_modis_MOD13A2(hdf_path)
+    
+    reds = []
+    NIRs = []
+    MIRs = []
+    img_cropped_names = []
+    geotransform2s = []
+    cols2, rows2 = size
+
+    if red is None or NIR is None or MIR is None:
+        print("Cannot handle this MODIS file: ", hdf_path, ". Please check it again")
+    # For day image
+    win_count = 0
+    for (x,y,window) in sliding_window(red, step, size):
+        if window.shape[0] != size[0] or window.shape[1] != size[1]:
+                continue
+
+        img_cropped = window
+        geotransform2 = np.asarray(geotransform)
+        geotransform2[0] = geotransform[0]+x*geotransform[1] # 1st coordinate of top left pixel of the image 
+        geotransform2[3] = geotransform[3]+y*geotransform[5] # 2nd coordinate of top left pixel of the image
+        geotransform2=tuple(geotransform2)
+
+        reds.append(img_cropped)
+        geotransform2s.append(geotransform2)
+        
+        win_count += 1
+    # print("Number of cropped day images", win_count)
+    
+    # For NIR image
+    win_count = 0
+    for (x,y,window) in sliding_window(NIR, step, size):
+        if window.shape[0] != size[0] or window.shape[1] != size[1]:
+                continue
+        img_cropped = window
+        # np.save(save_path,img_cropped)
+        NIRs.append(img_cropped)
+        win_count += 1
+
+    # For MIR image
+    win_count = 0
+    for (x,y,window) in sliding_window(MIR, step, size):
+        if window.shape[0] != size[0] or window.shape[1] != size[1]:
+                continue
+        img_cropped = window
+        # np.save(save_path,img_cropped)
+        MIRs.append(img_cropped)
+        win_count += 1
+
+    # Save images and metadata into .tif file
+    image_name_list = image_name.split(".")
+    image_name_list[0] = "MOD13Q1"
+    save_name = '.'.join(image_name_list)
+    save_path = os.path.join(ndvi_save_path,save_name)
+    succes = save_tif_MOD13A2(save_path, reds[i], NIRs[i], MIRs[i], cols2, rows2, projection, geotransform2s[i])
+    return succes
 
 
 def save_tif_MOD13A2(out_file, red_downsample, NIR_downsample, MIR_downsample, cols, rows, projection, geotransform):
@@ -417,8 +529,7 @@ def crop_modis_MOD13Q1(hdf_path, hdf_name,tifs_250m_path,step=4*64,size=(256,256
         return
 
     red, NIR, MIR, cols, rows, projection, geotransform = read_modis_MOD13A2(hdf_path)
-    print(rows,cols)
-
+    
     reds = []
     NIRs = []
     MIRs = []

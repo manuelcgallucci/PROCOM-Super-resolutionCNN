@@ -4,8 +4,10 @@ import numpy as np
 import time
 from utility import *
 from argparse import ArgumentParser
+import shutil
 
-def MODIS_Data_Preprocessing(year, product, num_threads):
+
+def MODIS_Data_Preprocessing(year, product,delete_files, num_threads):
     sensor        = product.split(".")[0]
     root_dir      = 'MODIS/MOD_{}_{}'.format(year,sensor)
     hdfs_path     = os.path.join(root_dir, 'hdfs_files')
@@ -33,15 +35,24 @@ def MODIS_Data_Preprocessing(year, product, num_threads):
         hdf = hdfs[index]
         if not hdf.endswith('hdf'): continue
         hdf_path = os.path.join(hdfs_path,hdf)
+        ndvi_folder = 'MODIS/MOD_{}_MOD13Q1'.format(year)
+        ndvi_save_path = os.path.join(ndvi_folder, 'tifs_files/250m')
+        ndvi_dir     = os.path.join(ndvi_folder, 'hdfs_files')
+        os.makedirs(ndvi_save_path,exist_ok=1)
+
         # LST images
         if sensor=='MOD11A1':
-            crop_modis(hdf_path, hdf,tifs_1km_path, 64, (64,64))
+            crop_modis(hdf_path, hdf,tifs_1km_path,ndvi_save_path,ndvi_dir, 64, (64,64))
         # NVDI 1k images
         elif sensor=='MOD13A2':
             crop_modis_MOD13A2(hdf_path, hdf,tifs_1km_path, 64, (64,64))
         # NVDI 250m images
         elif sensor == "MOD13Q1":
             crop_modis_MOD13Q1(hdf_path, hdf,tifs_250m_path, 256, (256,256))
+    
+    if(delete_files):
+        shutil.rmtree(ndvi_dir, ignore_errors=False, onerror=None)
+        shutil.rmtree(hdf_path, ignore_errors=False, onerror=None)
 
     print("Using {:.4f}s to process product = {}".format(time.time()-start_time, product))
 
@@ -49,15 +60,16 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('--year_begin', type=int, default=2000)
     parser.add_argument('--year_end', type=int, default=2021)
+    parser.add_argument('--delete_files', type=bool, default=False)
     args = parser.parse_args()
 
     years = list(np.arange(args.year_begin, args.year_end))
     # LST: "MOD11A1.061", NDVI 1KM: "MOD13A2.061", NDVI 250: "MOD13Q1.061"
-    products = ["MOD11A1.061","MOD13Q1.061"] 
+    products = ["MOD11A1.061"] 
     # tiles to download, France is in h17v04 and h18v04 , string of tiles separated by comma
     tiles = "h18v04"
     # Cores number to use     
     num_threads = 4
     for year in years:
         for product in products:
-            MODIS_Data_Preprocessing(year, product, num_threads)
+            MODIS_Data_Preprocessing(year, product, args.delete_files, num_threads)

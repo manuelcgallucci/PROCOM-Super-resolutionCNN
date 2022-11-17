@@ -12,9 +12,12 @@ def MODIS_Parallel_Downloader(year,product, num_threads, user="projet3a", passwo
     tifs_1km_path = 'MODIS/MOD_{}_{}/tifs_files/1km'.format(year,sensor)
     tifs_250m_path = 'MODIS/MOD_{}_{}/tifs_files/250m'.format(year,sensor)
     
-    os.makedirs(hdfs_path,exist_ok=1)
-    os.makedirs(tifs_1km_path,exist_ok=1)
-    os.makedirs(tifs_250m_path,exist_ok=1)
+    if sensor == 'MOD11A1':
+        os.makedirs(tifs_1km_path,exist_ok=1)
+    elif sensor == 'MOD13A2':
+        os.makedirs(tifs_1km_path,exist_ok=1)
+    elif sensor == "MOD13Q1":
+        os.makedirs(tifs_250m_path,exist_ok=1)
     
     # Download data with multi-core
     with pymp.Parallel(num_threads) as p:
