@@ -50,11 +50,11 @@ def sliding_window(img, step, window_size):
         for x in range(0, img.shape[1], step):
             yield (x, y, img[y:y + window_size[1], x:x + window_size[0]])
 
-def sliding_window_index(img,step,window_size,i):
+def sliding_window_index(img,step,window_size,cut):
     count = 0
     for y in range(0, img.shape[0], step):
         for x in range(0, img.shape[1], step):
-            if count == i :
+            if count == cut :
                 return (x, y, img[y:y + window_size[1], x:x + window_size[0]])
             count += 1
 
@@ -237,9 +237,9 @@ def crop_modis(hdf_path, hdf_name, save_dir,ndvi_save_path,ndvi_dir,step=64,size
         save_path = os.path.join(save_dir,img_cropped_names[i])
         succes = save_tif(save_path, img_days[i], img_nights[i], cols2, rows2, projection, geotransform2s[i])
         if(succes):
-            save_corresponding_ndvi(ndvi_save_path,ndvi_dir,img_cropped_names[i],i)
+            save_corresponding_ndvi(ndvi_save_path,ndvi_dir,img_cropped_names[i],i,save_path)
 
-def save_corresponding_ndvi(ndvi_save_path,ndvi_dir,image_name,cut):
+def save_corresponding_ndvi(ndvi_save_path,ndvi_dir,image_name,cut,lst_tif_path):
     ndvi_hdfs =  os.listdir(ndvi_dir)
     indexes_to_delete=[]
     for index in range(len(ndvi_hdfs)):
@@ -260,17 +260,20 @@ def save_corresponding_ndvi(ndvi_save_path,ndvi_dir,image_name,cut):
 
     #Save the corresponding part of the correct NDVI image
     ndvi_hdf_path = os.path.join(ndvi_dir, ndvi_hdfs[required_index])
-    success = crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,required_index)
+    success = crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,cut)
 
     while ( success != True and len(ndvi_list) != 0) :
-        del ndvi_list[required_index]
         required_index = min(range(len(ndvi_list)), key=lambda i: abs(ndvi_list[i]-lst_day))
         ndvi_hdf_path = os.path.join(ndvi_dir, ndvi_hdfs[required_index])
-        success = crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,required_index)
+        success = crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,cut)
+        del ndvi_list[required_index]
+
+    if(len(ndvi_list) == 0):
+        os.remove(lst_tif_path)
 
     return
 
-def crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,i):
+def crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,cut):
     hdf_path=ndvi_hdf_path
     if not ndvi_hdf_path.endswith('hdf'): 
         print("Not hdf file Sorry!")
@@ -278,9 +281,6 @@ def crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,i):
 
     img_day, img_night, cols, rows, projection, geotransform = read_modis(ndvi_hdf_path)
     
-    img_days = []
-    img_nights = []
-    img_cropped_names = []
     geotransform2s = []
     size = (256,256)
     step = 256
@@ -298,7 +298,7 @@ def crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,i):
         print("Cannot handle this MODIS file: ", hdf_path, ". Please check it again")
 
     # For day image
-    x,y,window = sliding_window_index(red, step, size,i)
+    x,y,window = sliding_window_index(red, step, size,cut)
     if window.shape[0] != size[0] or window.shape[1] != size[1]:
         return False
 
@@ -312,7 +312,7 @@ def crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,i):
     geotransform2s= geotransform2
         
     # For NIR image
-    x,y,window = sliding_window_index(NIR, step, size,i)
+    x,y,window = sliding_window_index(NIR, step, size,cut)
     if window.shape[0] != size[0] or window.shape[1] != size[1]:
             return False
     img_cropped = window
@@ -320,7 +320,7 @@ def crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,i):
     NIRs = img_cropped
 
     # For MIR image
-    x,y,window = sliding_window_index(MIR, step, size,i)
+    x,y,window = sliding_window_index(MIR, step, size,cut)
     if window.shape[0] != size[0] or window.shape[1] != size[1]:
             return False
     img_cropped = window
