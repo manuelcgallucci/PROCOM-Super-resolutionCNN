@@ -21,7 +21,7 @@ def MODIS_Parallel_Downloader(year,product, num_threads, user="projet3a", passwo
     
     # Download data with multi-core
     with pymp.Parallel(num_threads) as p:
-        for month in p.range(1, 2):
+        for month in p.range(1, 13):
             startdate = "{}-{}-01".format(str(year),str(month).zfill(2))
             if month != 12: 
                 enddate = "{}-{}-01".format(str(year),str(month+1).zfill(2))
