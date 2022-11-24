@@ -45,12 +45,15 @@ def MODIS_Data_Preprocessing(year, product,delete_files, num_threads):
             if sensor=='MOD11A1':
                 crop_modis(hdf_path, hdf,tifs_1km_path,ndvi_save_path,ndvi_dir, 64, (64,64))
             # NVDI 1k images
-            elif sensor=='MOD13A2':
-                crop_modis_MOD13A2(hdf_path, hdf,tifs_1km_path, 64, (64,64))
-            # NVDI 250m images
-            elif sensor == "MOD13Q1":
-                crop_modis_MOD13Q1(hdf_path, hdf,tifs_250m_path, 256, (256,256))
-    
+            # elif sensor=='MOD13A2':
+            #     crop_modis_MOD13A2(hdf_path, hdf,tifs_1km_path, 64, (64,64))
+            # # NVDI 250m images
+            # elif sensor == "MOD13Q1":
+            #     crop_modis_MOD13Q1(hdf_path, hdf,tifs_250m_path, 256, (256,256))
+            # elif sensor == "MOD09GQ":
+            #     # crop_modis_MOD09GQ()
+            # elif sensor == "MOD09GQ":
+
     if(delete_files):
         shutil.rmtree(ndvi_dir, ignore_errors=False, onerror=None)
         shutil.rmtree(hdfs_path, ignore_errors=False, onerror=None)
@@ -65,7 +68,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     years = list(np.arange(args.year_begin, args.year_end))
-    # LST: "MOD11A1.061", NDVI 1KM: "MOD13A2.061", NDVI 250: "MOD13Q1.061"
+    # Terra Surface reflectance "MOD09GQ" 
+    # Aqua Suarface reflectance "MYD09GQ" 
+    # LST: "MOD11A1.061"
+    # NDVI_1km: "MOD13A2.061", NDVI_250m: "MOD13Q1.061"
     products = ["MOD11A1.061"] 
     # tiles to download, France is in h17v04 and h18v04 , string of tiles separated by comma
     tiles = "h18v04"
