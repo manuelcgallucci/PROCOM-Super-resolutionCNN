@@ -24,6 +24,20 @@ def MODIS_Data_Preprocessing(year, product,delete_files, num_threads):
     elif sensor == "MOD13Q1":
         os.makedirs(tifs_250m_path,exist_ok=1)
 
+    ndvi_folder = 'MODIS/MOD_{}_MOD09GQ'.format(year)
+    ndvi_save_path = os.path.join(ndvi_folder, 'tifs_files/250m')
+    ndvi_dir     = os.path.join(ndvi_folder, 'hdfs_files')
+    os.makedirs(ndvi_save_path,exist_ok=1)
+
+    list_ndvi =  os.listdir(ndvi_dir)
+    indexes_to_delete=[]
+    for index in range(len(list_ndvi)):
+        if not list_ndvi[index].endswith('hdf'):
+            indexes_to_delete.append(index)
+    for j in sorted(indexes_to_delete,reverse=True):
+        del list_ndvi[j]
+    list_ndvi.sort()
+
     print("start to processing {}".format(hdfs_path))
     hdfs = os.listdir(hdfs_path)
     hdfs.sort()
@@ -36,14 +50,10 @@ def MODIS_Data_Preprocessing(year, product,delete_files, num_threads):
             hdf = hdfs[index]
             if not hdf.endswith('hdf'): continue
             hdf_path = os.path.join(hdfs_path,hdf)
-            ndvi_folder = 'MODIS/MOD_{}_MOD13Q1'.format(year)
-            ndvi_save_path = os.path.join(ndvi_folder, 'tifs_files/250m')
-            ndvi_dir     = os.path.join(ndvi_folder, 'hdfs_files')
-            os.makedirs(ndvi_save_path,exist_ok=1)
 
             # LST images
             if sensor=='MOD11A1':
-                crop_modis(hdf_path, hdf,tifs_1km_path,ndvi_save_path,ndvi_dir, 64, (64,64))
+                crop_modis(hdf_path, hdf,tifs_1km_path,ndvi_save_path,list_ndvi,ndvi_dir, 64, (64,64))
             # NVDI 1k images
             # elif sensor=='MOD13A2':
             #     crop_modis_MOD13A2(hdf_path, hdf,tifs_1km_path, 64, (64,64))

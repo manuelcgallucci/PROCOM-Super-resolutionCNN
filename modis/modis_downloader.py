@@ -53,7 +53,7 @@ if __name__ == "__main__":
     # Aqua Suarface reflectance MYD09GQ 
     # LST: "MOD11A1.061"
     # NDVI_1km: "MOD13A2.061", NDVI_250m: "MOD13Q1.061"
-    products = ["MOD09GQ.061","MYD09GQ.061"] # ["MOD11A1.061","MOD13Q1.061"]
+    products = ["MOD11A1.061","MOD09GQ.061"] # ["MOD11A1.061","MOD13Q1.061"]
     
     tiles = "h18v04" # tiles to download, France is in h17v04 and h18v04 , string of tiles separated by comma
     num_threads = 6 # Cores number to use 

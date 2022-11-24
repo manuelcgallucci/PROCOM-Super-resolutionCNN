@@ -137,7 +137,14 @@ def read_modis(in_file):
     to be completed if we need more information (georeference,bands,etc.)
     """
     # open dataset Day
-    dataset = gdal.Open(in_file,gdal.GA_ReadOnly)
+    try :
+        dataset = gdal.Open(in_file,gdal.GA_ReadOnly)
+    except :
+        return None
+
+    if(dataset is None):
+        return None
+        
     subdataset =	gdal.Open(dataset.GetSubDatasets()[0][0], gdal.GA_ReadOnly)
 
     cols =subdataset.RasterXSize
@@ -156,11 +163,8 @@ def read_modis(in_file):
     # To convert LST MODIS units to Kelvin
     LST_K_day=0.02*LST_raw
 
-    dataset = None
-    subdataset = None
     # open dataset Night
-    dataset = gdal.Open(in_file,gdal.GA_ReadOnly)
-    subdataset =	gdal.Open(dataset.GetSubDatasets()[4][0], gdal.GA_ReadOnly)
+    subdataset = gdal.Open(dataset.GetSubDatasets()[4][0], gdal.GA_ReadOnly)
 
     # We read the Image as an array
     band = subdataset.GetRasterBand(1)
@@ -169,13 +173,12 @@ def read_modis(in_file):
 
     # To convert LST MODIS units to Kelvin
     LST_K_night=0.02*LST_raw
-    dataset = None
-    subdataset = None
+
 
     # return LST_K_day, LST_K_night
     return LST_K_day, LST_K_night, cols, rows, projection, geotransform
 
-def crop_modis(hdf_path, hdf_name, save_dir,ndvi_save_path,ndvi_dir,step=64,size=(64,64)):
+def crop_modis(hdf_path, hdf_name, save_dir,ndvi_save_path,list_ndvi,ndvi_dir,step=64,size=(64,64)):
     """
     INPUT:
     hdf_path = input image path to be cropped | or hdf file path ("/a/b/c.hdf")
@@ -187,7 +190,12 @@ def crop_modis(hdf_path, hdf_name, save_dir,ndvi_save_path,ndvi_dir,step=64,size
         print("Not hdf file Sorry!")
         return 
 
-    img_day, img_night, cols, rows, projection, geotransform = read_modis(hdf_path)
+    read_val = read_modis(hdf_path)
+    if read_val is None:
+        print("Cannot handle this MODIS file: ", hdf_path, ". Please check it again")
+        return
+
+    img_day, img_night, cols, rows, projection, geotransform = read_val
     
     img_days = []
     img_nights = []
@@ -237,38 +245,21 @@ def crop_modis(hdf_path, hdf_name, save_dir,ndvi_save_path,ndvi_dir,step=64,size
         save_path = os.path.join(save_dir,img_cropped_names[i])
         succes = save_tif(save_path, img_days[i], img_nights[i], cols2, rows2, projection, geotransform2s[i])
         if(succes):
-            save_corresponding_ndvi(ndvi_save_path,ndvi_dir,img_cropped_names[i],i,save_path)
+            save_corresponding_ndvi(ndvi_save_path,list_ndvi,ndvi_dir,img_cropped_names[i],i,save_path)
 
-def save_corresponding_ndvi(ndvi_save_path,ndvi_dir,image_name,cut,lst_tif_path):
-    ndvi_hdfs =  os.listdir(ndvi_dir)
-    indexes_to_delete=[]
-    for index in range(len(ndvi_hdfs)):
-        if not ndvi_hdfs[index].endswith('hdf'):
-            indexes_to_delete.append(index)
-    for j in sorted(indexes_to_delete,reverse=True):
-        del ndvi_hdfs[j]
-    ndvi_hdfs.sort()
+def save_corresponding_ndvi(ndvi_save_path,list_ndvi,ndvi_dir,image_name,cut,lst_tif_path):
+    image_name_string = image_name.split(".")
+    image_day = image_name_string[1]
+    
+    success = False
+    for ndvi in list_ndvi :
+        ndvi_strings = ndvi.split(".")
+        if(image_day == ndvi_strings[1]):
+            ndvi_path = os.path.join(ndvi_dir, ndvi)
+            if os.path.exists(ndvi_path):
+                success = crop_corresponding_ndvi(ndvi_path,ndvi_save_path,image_name,cut)
 
-    #Build the list of days that the ndvis were shot at
-    ndvi_list=[]
-    for i in range(len(ndvi_hdfs)):
-        ndvi_list.append(int(ndvi_hdfs[i].split(".")[1][4:]))
-
-    #Get the closest match to the day of our lst
-    lst_day = int(image_name.split(".")[1][4:])
-    required_index = min(range(len(ndvi_list)), key=lambda i: abs(ndvi_list[i]-lst_day))
-
-    #Save the corresponding part of the correct NDVI image
-    ndvi_hdf_path = os.path.join(ndvi_dir, ndvi_hdfs[required_index])
-    success = crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,cut)
-
-    while ( success != True and len(ndvi_list) != 0) :
-        required_index = min(range(len(ndvi_list)), key=lambda i: abs(ndvi_list[i]-lst_day))
-        ndvi_hdf_path = os.path.join(ndvi_dir, ndvi_hdfs[required_index])
-        success = crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,cut)
-        del ndvi_list[required_index]
-
-    if(len(ndvi_list) == 0):
+    if success == False :
         os.remove(lst_tif_path)
 
     return
@@ -278,27 +269,26 @@ def crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,cut):
     if not ndvi_hdf_path.endswith('hdf'): 
         print("Not hdf file Sorry!")
         return 
-
-    img_day, img_night, cols, rows, projection, geotransform = read_modis(ndvi_hdf_path)
     
     geotransform2s = []
     size = (256,256)
     step = 256
     cols2, rows2 = size
 
-    if img_day is None or img_night is None:
+    read_value = read_modis_MOD09GQ(hdf_path)
+    if read_value is None :
         print("Cannot handle this MODIS file: ", hdf_path, ". Please check it again")
-        return
-
-    red, NIR, MIR, cols, rows, projection, geotransform = read_modis_MOD13A2(hdf_path)
+        return False
+    NDVI, cols, rows, projection, geotransform = read_value
     
-    cols2, rows2 = size
 
-    if red is None or NIR is None or MIR is None:
+
+    if NDVI is None :
         print("Cannot handle this MODIS file: ", hdf_path, ". Please check it again")
+        return False
 
-    # For day image
-    x,y,window = sliding_window_index(red, step, size,cut)
+    # For ndvi image
+    x,y,window = sliding_window_index(NDVI, step, size,cut)
     if window.shape[0] != size[0] or window.shape[1] != size[1]:
         return False
 
@@ -308,31 +298,15 @@ def crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,cut):
     geotransform2[3] = geotransform[3]+y*geotransform[5] # 2nd coordinate of top left pixel of the image
     geotransform2=tuple(geotransform2)
 
-    reds=  img_cropped
+    ndvi=  img_cropped
     geotransform2s= geotransform2
-        
-    # For NIR image
-    x,y,window = sliding_window_index(NIR, step, size,cut)
-    if window.shape[0] != size[0] or window.shape[1] != size[1]:
-            return False
-    img_cropped = window
-    # np.save(save_path,img_cropped)
-    NIRs = img_cropped
-
-    # For MIR image
-    x,y,window = sliding_window_index(MIR, step, size,cut)
-    if window.shape[0] != size[0] or window.shape[1] != size[1]:
-            return False
-    img_cropped = window
-    # np.save(save_path,img_cropped)
-    MIRs = img_cropped
 
     # Save images and metadata into .tif file
     image_name_list = image_name.split(".")
-    image_name_list[0] = "MOD13Q1"
+    image_name_list[0] = "MOD09GQ"
     save_name = '.'.join(image_name_list)
     save_path = os.path.join(ndvi_save_path,save_name)
-    succes = save_tif_MOD13A2(save_path, reds, NIRs, MIRs, cols2, rows2, projection, geotransform2s)
+    succes = save_tif_MOD09GQ(save_path, ndvi, cols2, rows2, projection, geotransform2s)
     return succes
 
 
@@ -364,10 +338,38 @@ def save_tif_MOD13A2(out_file, red_downsample, NIR_downsample, MIR_downsample, c
         
     return True
 
+def save_tif_MOD09GQ(out_file, NDVI, cols, rows, projection, geotransform):
+    # Eliminate the clouds' pixel
+    num_px = NDVI.shape[0]*NDVI.shape[1]
+    thres = 0 # Threshold: maximum number of sea/cloud pixels
+    # thres = 0.15 # Threshold: maximum number of sea/cloud pixels
+    #if len(NDVI[NDVI==0.0]) > thres*num_px :
+    #    return False
+
+    driver = gdal.GetDriverByName("GTiff")
+    outDs = driver.Create(out_file, NDVI.shape[0], NDVI.shape[1], 1, gdal.GDT_Float32) 
+    outDs.SetProjection(projection)
+    outDs.SetGeoTransform(geotransform) 
+
+    
+    outBand = outDs.GetRasterBand(1)
+    outBand.WriteArray(NDVI)
+    outDs.FlushCache()
+      
+    return True
+
 def read_modis_MOD13A2(in_file):
     # in_file = "MODIS/MOD_2020/hdfs_files/MOD13A2.A2020001.h18v04.061.2020326033640.hdf"
     # in_file = '/content/drive/MyDrive/Ganglin/1_IMT/MCE_Projet3A/MODIS/MOD_2020/hdfs_files/MOD11A1.A2020001.h18v04.061.2021003092415.hdf'
-    dataset = gdal.Open(in_file,gdal.GA_ReadOnly)
+
+    try:
+        dataset = gdal.Open(in_file,gdal.GA_ReadOnly)
+    except:
+        return None
+
+    if dataset is None :
+        return None
+    
     subdataset =	gdal.Open(dataset.GetSubDatasets()[3][0], gdal.GA_ReadOnly)
 
     cols =subdataset.RasterXSize
@@ -383,7 +385,6 @@ def read_modis_MOD13A2(in_file):
     red =0.02*LST_raw
 
     # open dataset Night
-    dataset = gdal.Open(in_file,gdal.GA_ReadOnly)
     subdataset =	gdal.Open(dataset.GetSubDatasets()[4][0], gdal.GA_ReadOnly)
 
     # We read the Image as an array
@@ -394,7 +395,6 @@ def read_modis_MOD13A2(in_file):
     NIR =0.02*LST_raw
 
     # open dataset Night
-    dataset = gdal.Open(in_file,gdal.GA_ReadOnly)
     subdataset =	gdal.Open(dataset.GetSubDatasets()[6][0], gdal.GA_ReadOnly)
 
     # We read the Image as an array
@@ -404,6 +404,48 @@ def read_modis_MOD13A2(in_file):
     # To convert LST MODIS units to Kelvin
     MIR =0.02*LST_raw
     return red, NIR, MIR, cols, rows, projection, geotransform
+
+def read_modis_MOD09GQ(in_file):
+
+    try:
+        dataset = gdal.Open(in_file,gdal.GA_ReadOnly)
+    except Exception as e:
+        return None
+
+    if dataset is None :
+        return None
+    
+    subdataset =	gdal.Open(dataset.GetSubDatasets()[1][0], gdal.GA_ReadOnly)
+
+    cols =subdataset.RasterXSize
+    rows = subdataset.RasterYSize
+    projection = subdataset.GetProjection()
+    geotransform = subdataset.GetGeoTransform()
+
+    # We read the Image as an array
+    band = subdataset.GetRasterBand(1)
+    LST_raw = band.ReadAsArray(0, 0, cols, rows).astype(np.float)
+
+    # To convert LST MODIS units to Kelvin
+    red =0.0001*LST_raw
+
+    # open dataset Night
+    subdataset =	gdal.Open(dataset.GetSubDatasets()[2][0], gdal.GA_ReadOnly)
+
+    # We read the Image as an array
+    band = subdataset.GetRasterBand(1)
+    LST_raw = band.ReadAsArray(0, 0, cols, rows).astype(np.float)
+    # bandtype = gdal.GetDataTypeName(band.DataType)
+    # To convert LST MODIS units to Kelvin
+    NIR =0.02*LST_raw
+
+    NDVI = np.zeros((rows,cols))
+    for i in range(rows):
+        for j in range(cols):
+            NDVI[i,j] = (NIR[i,j]-red[i,j])/(NIR[i,j]+red[i,j])
+
+    return  NDVI, cols, rows, projection, geotransform
+
 
 def crop_modis_MOD13A2(hdf_path, hdf_name, save_dir, save_dir_downsample_2, save_dir_downsample_4,step=64,size=(64,64)):
     """
