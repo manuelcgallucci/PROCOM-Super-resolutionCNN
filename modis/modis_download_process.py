@@ -33,6 +33,8 @@ def calculate_dates_daily(year, month):
         enddates.append("{}-{}-01".format(str(year),str(month+1).zfill(2)))
     else:
         enddates.append("{}-01-01".format(str(year+1)))
+    
+    return startdates, enddates
 
 def MODIS_Downloader(startdate, enddate, year, product, num_threads, tiles, user="projet3a", password="Projet3AIMT"):
     sensor        = product.split(".")[0]
@@ -50,7 +52,6 @@ def MODIS_Downloader(startdate, enddate, year, product, num_threads, tiles, user
         print("Download Error {} From {} to {}".format(hdfs_path, startdate,enddate))
     print("Finish download {} From {} to {}, time cost: {:.4f}".format(hdfs_path, startdate,enddate,time.time()-start_time))
 
-
 def MODIS_Downloader_DAILY(startdate, enddate, year, product, tiles, user="projet3a", password="Projet3AIMT"):
     sensor = product.split(".")[0]
     hdfs_path = 'MODIS/MOD_{}_{}/hdfs_files'.format(year,sensor)
@@ -58,14 +59,15 @@ def MODIS_Downloader_DAILY(startdate, enddate, year, product, tiles, user="proje
     start_time = time.time()
     print("Start to download {} From {} to {}".format(hdfs_path, startdate,enddate))
     
-    modisDown = downmodis.downModis(user=user,password=password,product=product,destinationFolder=hdfs_path, tiles=tiles, today=startdate, enddate=enddate)
-    modisDown.connect()
-    modisDown.downloadsAllDay()
+    try:
+        modisDown = downmodis.downModis(user=user,password=password,product=product,destinationFolder=hdfs_path, tiles=tiles, today=startdate, enddate=enddate)
+        modisDown.connect()
+        modisDown.downloadsAllDay()
     # modisDown.downloadsAllDay(clean=True, allDays=True)
-    # print("Download Error {} From {} to {}".format(hdfs_path, startdate,enddate))
+    except:
+        print("Download Error {} From {} to {}".format(hdfs_path, startdate,enddate))
     
     print("Finish download {} From {} to {}, time cost: {:.4f}".format(hdfs_path, startdate,enddate,time.time()-start_time))
-
 
 def MODIS_Data_Preprocessing(year, product, num_threads, delete_files=False):
     sensor        = product.split(".")[0]
