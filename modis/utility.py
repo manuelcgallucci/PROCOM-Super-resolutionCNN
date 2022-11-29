@@ -279,27 +279,43 @@ def crop_corresponding_ndvi(ndvi_hdf_path,ndvi_save_path,image_name,cut):
     if read_value is None :
         print("Cannot handle this MODIS file: ", hdf_path, ". Please check it again")
         return False
-    NDVI, cols, rows, projection, geotransform = read_value
+    qa, red, NIR, cols, rows, projection, geotransform = read_value
     
 
 
-    if NDVI is None :
+    if qa is None or red is None or NIR is None:
         print("Cannot handle this MODIS file: ", hdf_path, ". Please check it again")
         return False
 
     # For ndvi image
-    x,y,window = sliding_window_index(NDVI, step, size,cut)
-    if window.shape[0] != size[0] or window.shape[1] != size[1]:
+    x,y,qa = sliding_window_index(qa, step, size,cut)
+    if qa.shape[0] != size[0] or qa.shape[1] != size[1]:
+        return False
+    
+    x,y,red = sliding_window_index(red, step, size,cut)
+    if red.shape[0] != size[0] or red.shape[1] != size[1]:
+        return False
+    
+    x,y,NIR = sliding_window_index(NIR, step, size,cut)
+    if NIR.shape[0] != size[0] or NIR.shape[1] != size[1]:
+        return False
+    
+    if np.bitwise_and(qa, 0b11).all() != 0:
         return False
 
-    img_cropped = window
+    ndvi = np.zeros((size[0],size[1]))
+    for i in range(size[0]):
+        for j in range(size[1]):
+            if(NIR[i,j]+red[i,j] == 0):
+                ndvi[i,j] = 0
+            else :
+                ndvi[i,j] = (NIR[i,j]-red[i,j])/(NIR[i,j]+red[i,j])
+
     geotransform2 = np.asarray(geotransform)
     geotransform2[0] = geotransform[0]+x*geotransform[1] # 1st coordinate of top left pixel of the image 
     geotransform2[3] = geotransform[3]+y*geotransform[5] # 2nd coordinate of top left pixel of the image
     geotransform2=tuple(geotransform2)
-
-    ndvi=  img_cropped
-    geotransform2s= geotransform2
+    geotransform2s= geotransform2    
 
     # Save images and metadata into .tif file
     image_name_list = image_name.split(".")
@@ -414,13 +430,20 @@ def read_modis_MOD09GQ(in_file):
 
     if dataset is None :
         return None
-    
-    subdataset =	gdal.Open(dataset.GetSubDatasets()[1][0], gdal.GA_ReadOnly)
+
+    subdataset = gdal.Open(dataset.GetSubDatasets()[3][0], gdal.GA_ReadOnly)
 
     cols =subdataset.RasterXSize
     rows = subdataset.RasterYSize
     projection = subdataset.GetProjection()
     geotransform = subdataset.GetGeoTransform()
+
+    # We read the Quality assurance as an array
+    band = subdataset.GetRasterBand(1)
+    qa = band.ReadAsArray(0, 0, cols, rows)
+
+
+    subdataset =	gdal.Open(dataset.GetSubDatasets()[1][0], gdal.GA_ReadOnly)
 
     # We read the Image as an array
     band = subdataset.GetRasterBand(1)
@@ -439,12 +462,7 @@ def read_modis_MOD09GQ(in_file):
     # To convert LST MODIS units to Kelvin
     NIR =0.02*LST_raw
 
-    NDVI = np.zeros((rows,cols))
-    for i in range(rows):
-        for j in range(cols):
-            NDVI[i,j] = (NIR[i,j]-red[i,j])/(NIR[i,j]+red[i,j])
-
-    return  NDVI, cols, rows, projection, geotransform
+    return  qa, red, NIR, cols, rows, projection, geotransform
 
 
 def crop_modis_MOD13A2(hdf_path, hdf_name, save_dir, save_dir_downsample_2, save_dir_downsample_4,step=64,size=(64,64)):
