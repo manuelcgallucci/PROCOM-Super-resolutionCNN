@@ -17,7 +17,7 @@ class MixedGradientLoss():
 
     def get_gradient(self, img):
         # Compute the gradient for an image using the sobel operator  
-        return torch.sqrt(torch.square(F.conv2d(img, self.kernel_x)) + torch.square(F.conv2d(img, self.kernel_y)))
+        return torch.sqrt(torch.square(F.conv2d(img, self.kernel_x, padding=0)) + torch.square(F.conv2d(img, self.kernel_y, padding=0)))
 
     def get_loss(self, prediction, t_img, nvdi_img):
         '''
