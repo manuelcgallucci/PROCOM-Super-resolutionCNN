@@ -133,8 +133,9 @@ if __name__ == "__main__":
     # LST: "MOD11A1.061"
     products = ["MOD11A1.061","MOD09GQ.061"]
     
-    tiles = "h18v04" # tiles to download, France is in h17v04 and h18v04 , string of tiles separated by comma
-    num_threads = 6 # Cores number to use 
+    tiles = "h18v04" # tiles to download, France is in h17v04 and h18v04 , string of tiles separated by comma 
+    num_threads = 6
+    n_processes = 18
     for year in years:
         for month in range(1,13):
             
@@ -142,7 +143,6 @@ if __name__ == "__main__":
             startdates, enddates = calculate_dates_daily(year, month)
             total_days = len(startdates)
 
-            n_processes = 18
             for product in products:
                 
                 pool = mp.Pool(n_processes)
