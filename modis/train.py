@@ -1,5 +1,5 @@
 from tiff_process import tiff_process
-from dataset import LOADDataset
+#from dataset import LOADDataset
 import pymp
 import cv2
 import numpy as np
@@ -11,8 +11,12 @@ import time
 import argparse
 import os
 
-from model import MRUNet
-from utils import *
+
+import matplotlib.pyplot as plt
+
+# from model import MRUNet
+from loss import MixedGradientLoss
+from utility import *
 from dataloader import DataLoaderCustom
 
 
@@ -73,19 +77,21 @@ def validate(model, dataloader, epoch, val_data, max_val):
     return final_loss, final_psnr, final_ssim
 
 
-def process_data(path, train_size=0.75, n_cores=n_cores)
+def process_data(path, train_size=0.75, n_cores=3):
     # Images are saves in a .npz file.
     # LST are of size Nx2x64x64
-    # NVDI are Nx256x256
+    # ndvi are Nx256x256
     
-    assert os.paths.exists(path), "PathError: Path doesn't exist!"
+    assert os.path.exists(path), "PathError: Path doesn't exist!"
         
     start = time.time()
 
     # Read path 
-    np.load(path)
-    lst = npzfile['lst']   # Nx2x64x64
-    nvdi = npzfile['nvdi'] # Nx256x256
+    npzfile = np.load(path)
+    lst = npzfile['lst']   # Nx64x64x2
+    ndvi = npzfile['ndvi'] # Nx256x256
+    
+    assert lst.shape[0] == ndvi.shape[0], "ImageError: The number of lst and nvdi images are not correct!"
 
     N_imgs = lst.shape[0]
 
@@ -94,38 +100,60 @@ def process_data(path, train_size=0.75, n_cores=n_cores)
     randomize = np.arange(N_imgs)
     np.random.shuffle(randomize)
     lst = lst[randomize,:,:,:]
-    nvdi = nvdi[randomize,:,:]
+    ndvi = ndvi[randomize,:,:]
 
-    print("Verify TODO this rehape is correct!")
-    # This puts the night and day images one after the other, thus the indexing in the nvdi corresponding image for both is idx/2 
+    # This puts the night and day images one after the other, thus the indexing in the ndvi corresponding image for both is idx/2 
     # ( Images with clouds / sea already taken care of )
-    lst = lst.reshape(N_imgs*2, lst.shape[2], lst.shape[3])
+    aux = np.zeros((2*lst.shape[0], lst.shape[1], lst.shape[2]))
+    i = 0
+    for i in range(0,lst.shape[0]*2,2):
+        aux[i,:,:] = lst[int(i/2),:,:,0]
+        aux[i+1,:,:] = lst[int(i/2),:,:,1]
+    lst = aux
+    del aux
 
     # LST max value (for normalization)
-    max_val = np.max(y_train)
+    max_val = np.max(lst)
     print('Max pixel value of training set is {},\nIMPORTANT: Please save it for later used as the normalization factor\n'.format(max_val))
 
     lst = lst / max_val
-     
-    #lst = lst.shape(lst.shape[0],1,lst.shape[1],lst.shape[2])
-    #nvdi = nvdi.shape(nvdi.shape[0],1,nvdi.shape[1],nvdi.shape[2])
     
+    # This takes about 5 seconds for 5000 images so its ok to do it each time the script is run
+    Loss = MixedGradientLoss("cpu")
+    aux = torch.zeros((ndvi.shape[0], ndvi.shape[1]-2, ndvi.shape[2]-2))
+    for i in range(aux.shape[0]):
+        aux[i,:,:] = Loss.get_gradient( torch.Tensor(ndvi[None,i,:,:]))
+    
+    lst = torch.Tensor(lst)
+    ndvi = torch.Tensor(aux)
+
+    # Add none dimension due to batching in pytorch
+    lst = lst[:,None,:,:]
+    ndvi = ndvi[:,None,:,:]
+
     n_training_imgs = 2 * int(N_imgs * train_size)
 
-    lst_train = lst[:n_training_imgs,:,:]
-    nvdi_train = nvdi[:n_training_imgs/2,:,:]
+    lst_train = lst[:n_training_imgs,:,:,:]
+    ndvi_train = ndvi[:int(n_training_imgs/2),:,:,:]
 
-    lst_val = lst[n_training_imgs:,:,:]
-    nvdi_val = nvdi[n_training_imgs/2:,:,:]
+    lst_val = lst[n_training_imgs:,:,:,:]
+    ndvi_val = ndvi[int(n_training_imgs/2):,:,:,:]
+
+    
+    print("Total images used in each set:")
+    print("\tLST (day and night) train:{}, validation:{}".format(lst_train.shape[0],  lst_val.shape[0]))
+    print("\tndvi   (gradients)  train:{}, validation:{}".format(ndvi_train.shape[0], ndvi_val.shape[0]))
+    
+    # Plot ndvi and gradient for these images
+    # L = [34, 267, 1845]
+    # for im in L:
+    #     plt.imsave('NDVI_{}.png'.format(im),ndvi[im,:,:])
+    #     plt.imsave('NDVI_grad_{}.png'.format(im),aux[im,:,:])
 
     end = time.time()
-    print("Total images used in each set:")
-    print("\tLST (day and night) train:{}, validation:{}".format(n_training_imgs,  N_imgs * 2 - n_training_imgs))
-    print("\tNVDI   (gradients)  train:{}, validation:{}".format(n_training_imgs/2, N_imgs - n_training_imgs/2))
+    print(f"Finished processing data in {(end-start):.3f} seconds \n")
     
-    print(f"Finished processing data in {((end-start)/60):.3f} minutes \n")
-    
-    return lst_train, nvdi_train, lst_val, nvdi_val
+    return lst_train, ndvi_train, lst_val, ndvi_val
 
 def main(args):
 
@@ -135,21 +163,25 @@ def main(args):
         if input() != 'y':
             return 
 
-    model = MRUNet(res_down=True, n_resblocks=1, bilinear=0).to(device)
-
     n_cores = 4
 
-    lst_train, nvdi_train, lst_val, nvdi_val = process_data(args.datapath, n_cores=n_cores)
+    lst_train, ndvi_train, lst_val, ndvi_val = process_data(args.datapath, n_cores=n_cores)
+    lst_train, lst_val = lst_train.to(device), lst_val.to(device)
+    ndvi_train, ndvi_val = ndvi_train.to(device), ndvi_val.to(device) 
+
+    return None 
+    
+    model = MRUNet(res_down=True, n_resblocks=1, bilinear=0).to(device)
 
     # Load dataset and create data loader
     #transform = None
-    #train_data = LOADDataset(lst_train, nvdi_train, transform=transform)
-    #val_data = LOADDataset(lst_val, nvdi_val, transform=transform)
+    #train_data = LOADDataset(lst_train, ndvi_train, transform=transform)
+    #val_data = LOADDataset(lst_val, ndvi_val, transform=transform)
     
     batch_size = args.batch_size
     transform_augmentation_train = None
-    train_loader = DataLoaderCustom(lst_train, nvdi_train, batch_size=batch_size, shuffle=False)
-    val_loader = DataLoaderCustom(lst_val, nvdi_val, batch_size=batch_size)
+    train_loader = DataLoaderCustom(lst_train, ndvi_train, batch_size=batch_size, shuffle=False)
+    val_loader = DataLoaderCustom(lst_val, ndvi_val, batch_size=batch_size)
 
     print('Length of training set: {} \n'.format(len(train_data)))
     print('Length of validating set: {} \n'.format(len(val_data)))
@@ -215,6 +247,7 @@ def main(args):
             metrics = [train_loss,train_psnr,train_ssim,val_loss,val_psnr,val_ssim]
             np.save(losses_path,metrics)
             vloss = val_epoch_loss
+    
     end = time.time()
     print(f"Finished training in: {((end-start)/60):.3f} minutes")
 
@@ -222,6 +255,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="PyTorch MR UNet training from tif files contained in a data folder",
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--datapath', help='path to directory containing training tif data')
+    
     parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
     parser.add_argument('--epochs', default=300, type=int, help='number of epochs')
     parser.add_argument('--batch_size', default=24, type=int, help='size of batch')
