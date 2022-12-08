@@ -1,11 +1,8 @@
-from model import MRUNet
-from utils import *
 from tiff_process import tiff_process
 from dataset import LOADDataset
 import pymp
 import cv2
 import numpy as np
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 import torch
 import torch.nn.functional as F
@@ -14,79 +11,10 @@ import time
 import argparse
 import os
 
-parser = argparse.ArgumentParser(description="PyTorch MR UNet training from tif files contained in a data folder",
-                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--datapath', help='path to directory containing training tif data')
-parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
-parser.add_argument('--epochs', default=300, type=int, help='number of epochs')
-parser.add_argument('--batch_size', default=24, type=int, help='size of batch')
-parser.add_argument('--model_name', type=str, help='name of the model')
-parser.add_argument('--continue_train', choices=['True', 'False'], default='False', type=str, 
-                    help="flag for continue training, if True - continue training the 'model_name' model, else - training from scratch")
-args = parser.parse_args()
+from model import MRUNet
+from utils import *
+from dataloader import DataLoaderCustom
 
-
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-model = MRUNet(res_down=True, n_resblocks=1, bilinear=0).to(device)
-
-scale = 4
-n_cores = 4
-
-# Tiff process
-Y_day, Y_night = tiff_process(args.datapath, cores=n_cores)
-Y = np.concatenate((Y_day, Y_night),axis=0)
-Y_new = pymp.shared.list()
-
-# Eliminate images with cloud/sea pixels
-with pymp.Parallel(10) as p:
-  for i in p.range(Y.shape[0]):
-    if len(Y[i][Y[i] == 0]) <= 0:
-      Y_new.append(Y[i])
-Y_new = np.array(Y_new)
-start = time.time()
-
-# Create training and validating sets
-np.random.seed(1)
-np.random.shuffle(Y_new) # Shuffle dataset
-ratio = 0.75 # Proportion of training data
-y_train = Y_new[:int(Y_new.shape[0]*ratio)]
-y_val = Y_new[int(Y_new.shape[0]*ratio):]
-
-# DATA AUGMENTATION FOR TRAINING LABEL
-y_train_new = pymp.shared.list()
-with pymp.Parallel(n_cores) as p:
-  for i in p.range(y_train.shape[0]):
-    y_train_new.append(y_train[i])
-    y_train_new.append(np.flip(y_train[i], 1))
-y_train = np.array(y_train_new)
-max_val = np.max(y_train) # MAX VALUE IN TRAINING SET, WHICH IS USED FOR NORMALIZATION
-print('Max pixel value of training set is {},\nIMPORTANT: Please save it for later used as the normalization factor\n'.format(max_val))
-
-# INIT TRAINING DATA AND TESTING DATA SHAPE
-x_train = pymp.shared.array((y_train.shape))
-x_val = pymp.shared.array((y_val.shape))
-
-# PREPROCESS TO CREATE BICUBIC VERSION FOR MODEL INPUT
-with pymp.Parallel(n_cores) as p:
-  for i in p.range(y_train.shape[0]):
-    y_tr = y_train[i]
-    a = downsampling(y_tr, scale)
-    x_train[i,:,:] = upsampling(a , scale)
-    x_train[i,:,:] = normalization(x_train[i,:,:], max_val)
-
-with pymp.Parallel(n_cores) as p:
-  for i in p.range(y_val.shape[0]):
-    y_te = y_val[i]
-    a = downsampling(y_te, scale)
-    x_val[i,:,:] = upsampling(a , scale)
-    x_val[i,:,:] = normalization(x_val[i,:,:], max_val)
-
-x_train = x_train.reshape((x_train.shape[0], 1, x_train.shape[1], x_train.shape[2]))
-x_val = x_val.reshape((x_val.shape[0], 1, x_val.shape[1], x_val.shape[2]))
-y_train = y_train.reshape((y_train.shape[0], 1, y_train.shape[1], y_train.shape[2]))
-y_val = y_val.reshape((y_val.shape[0], 1, y_val.shape[1], y_val.shape[2]))
-end = time.time()
-print(f"Finished processing data in additional {((end-start)/60):.3f} minutes \n")
 
 def train(model, dataloader, optimizer, train_data, max_val):
     # Train model
@@ -144,17 +72,88 @@ def validate(model, dataloader, epoch, val_data, max_val):
     final_ssim = running_ssim/int(len(val_data)/dataloader.batch_size)
     return final_loss, final_psnr, final_ssim
 
-def main():
+
+def process_data(path, train_size=0.75, n_cores=n_cores)
+    # Images are saves in a .npz file.
+    # LST are of size Nx2x64x64
+    # NVDI are Nx256x256
+    
+    assert os.paths.exists(path), "PathError: Path doesn't exist!"
+        
+    start = time.time()
+
+    # Read path 
+    np.load(path)
+    lst = npzfile['lst']   # Nx2x64x64
+    nvdi = npzfile['nvdi'] # Nx256x256
+
+    N_imgs = lst.shape[0]
+
+    # Shuffle the images
+    np.random.seed(42)
+    randomize = np.arange(N_imgs)
+    np.random.shuffle(randomize)
+    lst = lst[randomize,:,:,:]
+    nvdi = nvdi[randomize,:,:]
+
+    print("Verify TODO this rehape is correct!")
+    # This puts the night and day images one after the other, thus the indexing in the nvdi corresponding image for both is idx/2 
+    # ( Images with clouds / sea already taken care of )
+    lst = lst.reshape(N_imgs*2, lst.shape[2], lst.shape[3])
+
+    # LST max value (for normalization)
+    max_val = np.max(y_train)
+    print('Max pixel value of training set is {},\nIMPORTANT: Please save it for later used as the normalization factor\n'.format(max_val))
+
+    lst = lst / max_val
+     
+    #lst = lst.shape(lst.shape[0],1,lst.shape[1],lst.shape[2])
+    #nvdi = nvdi.shape(nvdi.shape[0],1,nvdi.shape[1],nvdi.shape[2])
+    
+    n_training_imgs = 2 * int(N_imgs * train_size)
+
+    lst_train = lst[:n_training_imgs,:,:]
+    nvdi_train = nvdi[:n_training_imgs/2,:,:]
+
+    lst_val = lst[n_training_imgs:,:,:]
+    nvdi_val = nvdi[n_training_imgs/2:,:,:]
+
+    end = time.time()
+    print("Total images used in each set:")
+    print("\tLST (day and night) train:{}, validation:{}".format(n_training_imgs,  N_imgs * 2 - n_training_imgs))
+    print("\tNVDI   (gradients)  train:{}, validation:{}".format(n_training_imgs/2, N_imgs - n_training_imgs/2))
+    
+    print(f"Finished processing data in {((end-start)/60):.3f} minutes \n")
+    
+    return lst_train, nvdi_train, lst_val, nvdi_val
+
+def main(args):
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    if device != 'cuda':
+        print("Not executing on the GPU. Continue ? (y/n)")
+        if input() != 'y':
+            return 
+
+    model = MRUNet(res_down=True, n_resblocks=1, bilinear=0).to(device)
+
+    n_cores = 4
+
+    lst_train, nvdi_train, lst_val, nvdi_val = process_data(args.datapath, n_cores=n_cores)
+
     # Load dataset and create data loader
-    transform = None
-    train_data = LOADDataset(x_train, y_train, transform=transform)
-    val_data = LOADDataset(x_val, y_val, transform=transform)
+    #transform = None
+    #train_data = LOADDataset(lst_train, nvdi_train, transform=transform)
+    #val_data = LOADDataset(lst_val, nvdi_val, transform=transform)
+    
     batch_size = args.batch_size
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle = True)
-    val_loader = DataLoader(val_data, batch_size=batch_size)
+    transform_augmentation_train = None
+    train_loader = DataLoaderCustom(lst_train, nvdi_train, batch_size=batch_size, shuffle=False)
+    val_loader = DataLoaderCustom(lst_val, nvdi_val, batch_size=batch_size)
+
     print('Length of training set: {} \n'.format(len(train_data)))
     print('Length of validating set: {} \n'.format(len(val_data)))
-    print('Shape of input and output: ({},{}) \n'.format(x_train.shape[-2],x_train.shape[-1]))
+    print('Shape of input: ({},{}) \n'.format(lst_train.shape[-2],lst_train.shape[-1]))
 
     epochs = args.epochs
     lr = args.lr
@@ -220,7 +219,18 @@ def main():
     print(f"Finished training in: {((end-start)/60):.3f} minutes")
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description="PyTorch MR UNet training from tif files contained in a data folder",
+                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--datapath', help='path to directory containing training tif data')
+    parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
+    parser.add_argument('--epochs', default=300, type=int, help='number of epochs')
+    parser.add_argument('--batch_size', default=24, type=int, help='size of batch')
+    parser.add_argument('--model_name', type=str, help='name of the model')
+    parser.add_argument('--continue_train', choices=['True', 'False'], default='False', type=str, 
+                        help="flag for continue training, if True - continue training the 'model_name' model, else - training from scratch")
+    args = parser.parse_args()
+
+    main(args)
 
 
 
