@@ -14,4 +14,4 @@ class DataLoaderCustom(Dataset):
         return self.data_lst.shape[0]
     
     def __getitem__(self, index):
-        return self.data_lst[index,:,:], self.data_nvdi[index/2,:,:]
+        return self.data_lst[index,:,:], self.data_nvdi[int(index/2),:,:]
