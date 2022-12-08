@@ -104,16 +104,17 @@ def MODIS_Data_Preprocessing(year, product, num_threads, delete_files=False):
     hdfs.sort()
     start_time = time.time()
     # Core images with multi-core
-    with pymp.Parallel(num_threads) as p:
-        for index in p.range(0, len(hdfs)):
+    # with pymp.Parallel(num_threads) as p:
+    #     for index in p.range(0, len(hdfs)):
+    for index in range(0, len(hdfs)):
 
-            hdf = hdfs[index]
-            if not hdf.endswith('hdf'): continue
-            hdf_path = os.path.join(hdfs_path,hdf)
+        hdf = hdfs[index]
+        if not hdf.endswith('hdf'): continue
+        hdf_path = os.path.join(hdfs_path,hdf)
 
-            # LST images
-            if sensor=='MOD11A1':
-                crop_modis(hdf_path, hdf,tifs_1km_path,ndvi_save_path,list_ndvi,ndvi_dir, 64, (64,64))
+        # LST images
+        if sensor=='MOD11A1':
+            crop_modis(hdf_path, hdf,tifs_1km_path,ndvi_save_path,list_ndvi,ndvi_dir, 64, (64,64))
 
     if delete_files:
         shutil.rmtree(ndvi_dir, ignore_errors=False, onerror=None)
