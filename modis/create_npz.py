@@ -3,7 +3,7 @@ import os
 from skimage import io
 
 
-years=[2015,2016,2017,2018,2019,2020,2021]
+years=[2021]
 
 lst=None
 ndvi=None
@@ -57,6 +57,9 @@ for k in range(len(years)) :
                 current_array = np.reshape(current_array,(1,64,64,2))
                 lst = np.concatenate([lst, current_array], axis=0)
             i += 1 
+            #if(i==10):
+            #    break
+    
 
     for j in sorted(ndvi_indexes_to_delete,reverse=True):
         del ndvi_tifs[j]
@@ -73,10 +76,12 @@ for k in range(len(years)) :
                 current_array = np.reshape(io.imread(tif_path),(1,256,256))
                 ndvi = np.concatenate([ndvi, current_array], axis=0)
             i += 1 
+            #if(i==10):
+            #    break
 
 print(np.shape(lst))
 print(np.shape(ndvi))
-np.savez_compressed('data',lst=lst, ndvi=ndvi)
+np.savez_compressed('data_stats',lst=lst, ndvi=ndvi)
 
 
 
