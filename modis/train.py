@@ -19,6 +19,8 @@ from loss import MixedGradientLoss
 from utility import *
 from dataloader import DatasetCustom
 
+# nohup python3 train.py --datapath ./data/final_database.npz --model_name test_v1 &
+
 def run_model(model, dataloader, optimizer, loss, batch_size, device, phase=None):
     if phase == "train":
         model.train()
