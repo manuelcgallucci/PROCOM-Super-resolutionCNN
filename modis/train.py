@@ -10,75 +10,80 @@ import torch.optim as optim
 import time
 import argparse
 import os
-
+from torch.utils.data import DataLoader 
 
 import matplotlib.pyplot as plt
 
 from model import MRUNet
 from loss import MixedGradientLoss
 from utility import *
-from dataloader import DataLoaderCustom
+from dataloader import DatasetCustom
 
-
-def train(model, dataloader, optimizer, train_data, max_val, batch_size, device):
-    # Train model
-    model.train()
+def run_model(model, dataloader, optimizer, loss, batch_size, device, phase=None):
+    if phase == "train":
+        model.train()
+    elif phase == "validation":
+        model.eval()
+    else:
+        print("Error: Phase not defined for function run_model.\n") 
+        return None
+    
     running_loss = 0.0
     running_psnr = 0.0
     running_ssim = 0.0
-    for bi, data in tqdm(enumerate(dataloader), total=int(len(train_data)/batch_size)):
-        image_data = data[0].to(device)
-        print(np.shape(image_data))
-        label = data[1].to(device)
-        
-        # zero grad the optimizer
-        optimizer.zero_grad()
-        outputs = model(image_data)
-        loss = MixedGradientLoss("cpu").get_loss(self, outputs*max_val, image_data, label)
-        #loss = get_loss(outputs*max_val, label)
-        # backpropagation
-        loss.backward()
-        # update the parameters
-        optimizer.step()
-        # add loss of each item (total items in a batch = batch size)
-        running_loss += loss.item()
-        # calculate batch psnr (once every `batch_size` iterations)
-        batch_psnr =  psnr(label, outputs, max_val)
-        running_psnr += batch_psnr
-        batch_ssim =  ssim(label, outputs, max_val)
-        running_ssim += batch_ssim
-    final_loss = running_loss/len(dataloader.dataset)
-    final_psnr = running_psnr/int(len(train_data)/batch_size)
-    final_ssim = running_ssim/int(len(train_data)/batch_size)
-    return final_loss, final_psnr, final_ssim
 
-def validate(model, dataloader, epoch, val_data, max_val, batch_size, device):
-    model.eval()
-    running_loss = 0.0
-    running_psnr = 0.0
-    running_ssim = 0.0
-    with torch.no_grad():
-        for bi, data in tqdm(enumerate(dataloader), total=int(len(val_data)/batch_size)):
-            image_data = data[0].to(device)
-            label = data[1].to(device)
-            outputs = model(image_data)
+    # TODO remove this line, it is to test nan values in grad
+    torch.autograd.set_detect_anomaly(True)
+
+    if phase == "train":
+        for data_lst, data_nvdi in dataloader:
+            #image_data = data[0].to(device)        
+            # zero grad the optimizer
+            optimizer.zero_grad()
             
-            loss = MixedGradientLoss("cpu").get_loss(self, outputs*max_val, image_data, label)
-            #loss = get_loss(outputs*max_val, label)
-            # add loss of each item (total items in a batch = batch size) 
-            running_loss += loss.item()
+            outputs = model(data_lst)
+            
+            loss_ = loss.get_loss(outputs, data_lst, data_nvdi)
+
+            # backpropagation
+            (loss_.sum()).backward()
+            
+            # update the parameters
+            optimizer.step()
+            
+            # add loss of each item (total items in a batch = batch size)
+            running_loss += loss_.sum().item()
+
             # calculate batch psnr (once every `batch_size` iterations)
-            batch_psnr = psnr(label, outputs, max_val)
-            running_psnr += batch_psnr
-            batch_ssim =  ssim(label, outputs, max_val)
-            running_ssim += batch_ssim
-        outputs = outputs.cpu()
-        # save_image(outputs, f"../outputs/val_sr{epoch}.png")
-    final_loss = running_loss/len(dataloader.dataset)
-    print(final_loss)
-    final_psnr = running_psnr/int(len(val_data)/batch_size)
-    final_ssim = running_ssim/int(len(val_data)/batch_size)
-    return final_loss, final_psnr, final_ssim
+            # batch_psnr =  psnr(label, outputs, max_val)
+            # running_psnr += batch_psnr
+            # batch_ssim =  ssim(label, outputs, max_val)
+            # running_ssim += batch_ssim
+            
+            # for p in model.parameters():
+            #     if p.requires_grad:
+            #         print(p.name, p.data)
+
+    elif phase == "validation":
+        with torch.no_grad():
+            for data_lst, data_nvdi in dataloader:
+                outputs = model(data_lst)
+                
+                loss_ = loss.get_loss(outputs, data_lst, data_nvdi)
+                running_loss += loss_.sum().item()
+
+                # calculate batch psnr (once every `batch_size` iterations)
+                # batch_psnr =  psnr(label, outputs, max_val)
+                # running_psnr += batch_psnr
+                # batch_ssim =  ssim(label, outputs, max_val)
+                # running_ssim += batch_ssim
+        
+    # final_loss = running_loss/len(dataloader.dataset)
+    # final_psnr = running_psnr/int(len(dataloader.dataset)/batch_size)
+    # final_ssim = running_ssim/int(len(dataloader.dataset)/batch_size)
+    # return final_loss, final_psnr, final_ssim
+    return running_loss, running_loss, running_loss
+
 
 
 def process_data(path, train_size=0.75, n_cores=3):
@@ -128,7 +133,14 @@ def process_data(path, train_size=0.75, n_cores=3):
     for i in range(aux.shape[0]):
         aux[i,:,:] = Loss.get_gradient( torch.Tensor(ndvi[None,i,:,:]))
     
-    lst = torch.Tensor(lst)
+    upsampled_lst = np.zeros((lst.shape[0], 256, 256)) 
+
+    for i in range(lst.shape[0]):
+        upsampled_lst[i,:,:] = cv2.resize(lst[i,:,:], (256, 256), cv2.INTER_CUBIC)
+
+    del lst
+
+    lst = torch.Tensor(upsampled_lst)
     ndvi = torch.Tensor(aux)
 
     # Add none dimension due to batching in pytorch
@@ -170,10 +182,10 @@ def main(args):
     n_cores = 4
 
     lst_train, ndvi_train, lst_val, ndvi_val = process_data(args.datapath, n_cores=n_cores)
+    
+    # At this point all images are put in the GPU (which is faster but takes more memory, consider updating them in the dataloader loop)
     lst_train, lst_val = lst_train.to(device), lst_val.to(device)
     ndvi_train, ndvi_val = ndvi_train.to(device), ndvi_val.to(device) 
-    
-    model = MRUNet(res_down=True, n_resblocks=1, bilinear=0).to(device)
     
     # Load dataset and create data loader
     #transform = None
@@ -182,20 +194,24 @@ def main(args):
     
     batch_size = args.batch_size
     transform_augmentation_train = None
-    train_loader = DataLoaderCustom(lst_train, ndvi_train)
-    val_loader = DataLoaderCustom(lst_val, ndvi_val)
-    train_data = train_loader
-    val_data = val_loader
-    print('Length of training set: {} \n'.format(len(train_data)))
-    print('Length of validating set: {} \n'.format(len(val_data)))
-    print('Shape of input: ({},{}) \n'.format(lst_train.shape[-2],lst_train.shape[-1]))
+    train_dataset = DatasetCustom(lst_train, ndvi_train)
+    val_dataset = DatasetCustom(lst_val, ndvi_val)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
+    #print('Length of training set: {}'.format(len(train_loader)))
+    #print('Length of validating set: {}'.format(len(val_loader)))
+    print('\tShape of LST input: ({},{})'.format(lst_train.shape[-2],lst_train.shape[-1]))
+    print('\tShape of NVDI gradient input: ({},{})'.format(ndvi_train.shape[-2],ndvi_train.shape[-1]))
+    
     epochs = args.epochs
     lr = args.lr
     model_name = args.model_name
     continue_train = args.continue_train == 'True'
 
+    model = MRUNet(res_down=True, n_resblocks=1, bilinear=0).to(device)    
     optimizer = optim.Adam(model.parameters(), lr=lr)
+    loss = MixedGradientLoss(device)
 
     if os.path.exists("Metrics") == False:
         os.makedirs("Metrics")
@@ -208,7 +224,7 @@ def main(args):
         start = time.time()
 
         last_epoch = -1
-        vloss = np.inf
+        best_validation_loss = np.inf
 
     else:
         # Load the lists of last time training metrics
@@ -226,31 +242,48 @@ def main(args):
         losses = checkpoint['losses']
         vloss = losses[3]
 
+    # TODO remove this test image thing 
+    test_img_idx = 31
+    plt.imsave('original_img.png',(lst_train[test_img_idx,0,:,:]).cpu().detach().numpy())
+    plt.imsave('original_nvdi_img.png',(ndvi_train[test_img_idx,0,:,:]).cpu().detach().numpy())
+    
     for epoch in range(last_epoch+1,epochs):
+        
         print(f"Epoch {epoch + 1} of {epochs}")
-        max_val = 1
-        train_epoch_loss, train_epoch_psnr, train_epoch_ssim = train(model, train_loader, optimizer, train_data, max_val, batch_size, device)
-        val_epoch_loss, val_epoch_psnr, val_epoch_ssim = validate(model, val_loader, epoch, val_data, max_val, batch_size, device)
-        print(f"Train loss: {train_epoch_loss:.6f}")
-        print(f"Val loss: {val_epoch_loss:.6f}")
+
+        train_epoch_loss, train_epoch_psnr, train_epoch_ssim = run_model(model, train_loader, optimizer, loss, batch_size, device, phase="train")
+        val_epoch_loss, val_epoch_psnr, val_epoch_ssim = run_model(model, train_loader, optimizer, loss, batch_size, device, phase="validation")
+        
+        if epoch % 5 == 0:
+            output = model(lst_train[test_img_idx,:,:,:][None,:,:,:])
+            plt.imsave('output_ep_{:d}.png'.format(epoch),output[0,0,:,:].cpu().detach().numpy())
+
+        
+        print(f"\tTrain loss: {train_epoch_loss:.6f}")
+        print(f"\tVal loss: {val_epoch_loss:.6f}")
         train_loss.append(train_epoch_loss)
         train_psnr.append(train_epoch_psnr)
         train_ssim.append(train_epoch_ssim)
         val_loss.append(val_epoch_loss)
         val_psnr.append(val_epoch_psnr)
         val_ssim.append(val_epoch_ssim)
-        if val_epoch_loss < vloss:
-            print("Save model...")
+        
+        if val_epoch_loss < best_validation_loss:
+            print(10*"=")
+            print("Saving model...")
+            print(10*"=")
+
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'losses': [train_epoch_loss, train_epoch_psnr, train_epoch_ssim,val_epoch_loss, val_epoch_psnr, val_epoch_ssim],
+                'losses': [train_epoch_loss, train_epoch_psnr, train_epoch_ssim, val_epoch_loss, val_epoch_psnr, val_epoch_ssim],
                 }, model_name)
+            
             losses_path = os.path.join("./Metrics",model_name)
             metrics = [train_loss,train_psnr,train_ssim,val_loss,val_psnr,val_ssim]
             np.save(losses_path,metrics)
-            vloss = val_epoch_loss
+            best_validation_loss = val_epoch_loss
     
     end = time.time()
     print(f"Finished training in: {((end-start)/60):.3f} minutes")
@@ -262,7 +295,7 @@ if __name__ == '__main__':
     
     parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
     parser.add_argument('--epochs', default=300, type=int, help='number of epochs')
-    parser.add_argument('--batch_size', default=24, type=int, help='size of batch')
+    parser.add_argument('--batch_size', default=8, type=int, help='size of batch')
     parser.add_argument('--model_name', type=str, help='name of the model')
     parser.add_argument('--continue_train', choices=['True', 'False'], default='False', type=str, 
                         help="flag for continue training, if True - continue training the 'model_name' model, else - training from scratch")

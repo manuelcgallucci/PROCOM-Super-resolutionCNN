@@ -373,18 +373,18 @@ class MRUNet(nn.Module):
         self.drop = nn.Dropout(p=0.3)
 
     def forward(self, x):
-        x1 = self.inc(x) #64
-        x2 = self.down1(x1) #128
-        x3 = self.down2(x2) #256 
-        x4 = self.down3(x3) #512
-        x5 = self.down4(x4) #1024
+        x1 = self.inc(x) #256
+        x2 = self.down1(x1) #512
+        x3 = self.down2(x2) #1024 
+        x4 = self.down3(x3) #2048
+        x5 = self.down4(x4) #4096
 
         x5 = self.resblocks(x5)
 
-        xp1 = self.up1(x5, x4) #512
-        xp2 = self.up2(xp1, x3) #256
-        xp3 = self.up3(xp2, x2) #128
-        xp4 = self.up4(xp3, x1) #64
+        xp1 = self.up1(x5, x4) #2048
+        xp2 = self.up2(xp1, x3) #1024
+        xp3 = self.up3(xp2, x2) #512
+        xp4 = self.up4(xp3, x1) #256
         # x = self.up(x)
         # x = self.up_dc(x)
         logits = self.outc(xp4)+x
