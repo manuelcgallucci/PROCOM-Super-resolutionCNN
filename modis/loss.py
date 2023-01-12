@@ -17,20 +17,23 @@ class MixedGradientLoss():
 
     def get_gradient(self, img):
         # Compute the gradient for an image using the sobel operator  
-        return torch.sqrt(torch.square(F.conv2d(img, self.kernel_x, padding=0)) + torch.square(F.conv2d(img, self.kernel_y, padding=0)))
+        # Orginially: torch.sqrt(torch.square(F.conv2d(img, self.kernel_x, padding=0)) + torch.square(F.conv2d(img, self.kernel_y, padding=0)))
+        # Removed sqrt as the backwards loss call gave an error 
+        return torch.square(F.conv2d(img, self.kernel_x, padding=0)) + torch.square(F.conv2d(img, self.kernel_y, padding=0))
+
 
     def get_loss(self, prediction, t_img, nvdi_img):
         '''
         prediction: Predicted image at 250 m  batchx1x256x256
-        t_img: Temperature images at 1km      batchx1x64x64
-        nvdi_img: NVDI images at 250m         batchx1x256x256
+        t_img: Temperature images at 1km      batchx1x256x256
+        nvdi_img: NVDI gradient images at 250m         batchx1x254x254
         '''
         # Mean gradient error
-        MGE = torch.square(self.get_gradient(prediction) - self.get_gradient(nvdi_img)).mean()
+        MGE = torch.square(self.get_gradient(prediction) - nvdi_img).mean(dim=[1,2,3])
         # Mean squared error [ 256 -> 64 (x4) ]
-        MSE = torch.square(t_img- F.interpolate(prediction, scale_factor=0.25, mode="bilinear")).mean()
+        MSE = torch.square(t_img- prediction).mean(dim=[1,2,3])
         # F.interpolate()
-        
+
         return MGE + self.alpha * MSE
 
 
