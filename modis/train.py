@@ -19,6 +19,8 @@ from loss import MixedGradientLoss
 from utility import *
 from dataloader import DatasetCustom
 
+# nohup python3 train.py --datapath ./data/final_database.npz --model_name test_v1 &
+
 def run_model(model, dataloader, optimizer, loss, batch_size, device, phase=None):
     if phase == "train":
         model.train()
@@ -84,8 +86,6 @@ def run_model(model, dataloader, optimizer, loss, batch_size, device, phase=None
     # return final_loss, final_psnr, final_ssim
     return running_loss, running_loss, running_loss
 
-
-
 def process_data(path, train_size=0.75, n_cores=3):
     # Images are saves in a .npz file.
     # LST are of size Nx2x64x64
@@ -111,6 +111,9 @@ def process_data(path, train_size=0.75, n_cores=3):
     lst = lst[randomize,:,:,:]
     ndvi = ndvi[randomize,:,:]
 
+    lst = lst[:1500,:,:,:]
+    ndvi = ndvi[:1500,:,:]
+    
     # This puts the night and day images one after the other, thus the indexing in the ndvi corresponding image for both is idx/2 
     # ( Images with clouds / sea already taken care of )
     aux = np.zeros((2*lst.shape[0], lst.shape[1], lst.shape[2]))
