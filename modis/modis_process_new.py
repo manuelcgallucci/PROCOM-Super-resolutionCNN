@@ -233,7 +233,8 @@ def process_hdf(hdf_path, hdf_name, save_dir,ndvi_save_path,list_ndvi,ndvi_dir,s
                 save_path_ndvi = os.path.join(ndvi_save_path,ndvi_names[i])
                 save_tif_MOD09GQ(save_path_ndvi, ndvis[i], 256, 256, ndvi_projection, ndvi_geotransforms[i])
             else:
-                os.remove(save_path)  
+                os.remove(save_path) 
+                 
             """ downscaled_red = skimage.transform.downscale_local_mean(reds[i],(4,4))
             downscaled_nir = skimage.transform.downscale_local_mean(NIRs[i],(4,4))
             print(np.shape(downscaled_nir))
