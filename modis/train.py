@@ -14,26 +14,28 @@ import os
 
 import matplotlib.pyplot as plt
 
-# from model import MRUNet
+from model import MRUNet
 from loss import MixedGradientLoss
 from utility import *
 from dataloader import DataLoaderCustom
 
 
-def train(model, dataloader, optimizer, train_data, max_val):
+def train(model, dataloader, optimizer, train_data, max_val, batch_size, device):
     # Train model
     model.train()
     running_loss = 0.0
     running_psnr = 0.0
     running_ssim = 0.0
-    for bi, data in tqdm(enumerate(dataloader), total=int(len(train_data)/dataloader.batch_size)):
+    for bi, data in tqdm(enumerate(dataloader), total=int(len(train_data)/batch_size)):
         image_data = data[0].to(device)
+        print(np.shape(image_data))
         label = data[1].to(device)
         
         # zero grad the optimizer
         optimizer.zero_grad()
         outputs = model(image_data)
-        loss = get_loss(outputs*max_val, label)
+        loss = MixedGradientLoss("cpu").get_loss(self, outputs*max_val, image_data, label)
+        #loss = get_loss(outputs*max_val, label)
         # backpropagation
         loss.backward()
         # update the parameters
@@ -46,22 +48,23 @@ def train(model, dataloader, optimizer, train_data, max_val):
         batch_ssim =  ssim(label, outputs, max_val)
         running_ssim += batch_ssim
     final_loss = running_loss/len(dataloader.dataset)
-    final_psnr = running_psnr/int(len(train_data)/dataloader.batch_size)
-    final_ssim = running_ssim/int(len(train_data)/dataloader.batch_size)
+    final_psnr = running_psnr/int(len(train_data)/batch_size)
+    final_ssim = running_ssim/int(len(train_data)/batch_size)
     return final_loss, final_psnr, final_ssim
 
-def validate(model, dataloader, epoch, val_data, max_val):
+def validate(model, dataloader, epoch, val_data, max_val, batch_size, device):
     model.eval()
     running_loss = 0.0
     running_psnr = 0.0
     running_ssim = 0.0
     with torch.no_grad():
-        for bi, data in tqdm(enumerate(dataloader), total=int(len(val_data)/dataloader.batch_size)):
+        for bi, data in tqdm(enumerate(dataloader), total=int(len(val_data)/batch_size)):
             image_data = data[0].to(device)
             label = data[1].to(device)
             outputs = model(image_data)
             
-            loss = get_loss(outputs*max_val, label)
+            loss = MixedGradientLoss("cpu").get_loss(self, outputs*max_val, image_data, label)
+            #loss = get_loss(outputs*max_val, label)
             # add loss of each item (total items in a batch = batch size) 
             running_loss += loss.item()
             # calculate batch psnr (once every `batch_size` iterations)
@@ -72,8 +75,9 @@ def validate(model, dataloader, epoch, val_data, max_val):
         outputs = outputs.cpu()
         # save_image(outputs, f"../outputs/val_sr{epoch}.png")
     final_loss = running_loss/len(dataloader.dataset)
-    final_psnr = running_psnr/int(len(val_data)/dataloader.batch_size)
-    final_ssim = running_ssim/int(len(val_data)/dataloader.batch_size)
+    print(final_loss)
+    final_psnr = running_psnr/int(len(val_data)/batch_size)
+    final_ssim = running_ssim/int(len(val_data)/batch_size)
     return final_loss, final_psnr, final_ssim
 
 
@@ -91,7 +95,7 @@ def process_data(path, train_size=0.75, n_cores=3):
     lst = npzfile['lst']   # Nx64x64x2
     ndvi = npzfile['ndvi'] # Nx256x256
     
-    assert lst.shape[0] == ndvi.shape[0], "ImageError: The number of lst and nvdi images are not correct!"
+    assert lst.shape[0] == ndvi.shape[0], "ImageError: The number of lst and nvdi images is not correct!"
 
     N_imgs = lst.shape[0]
 
@@ -168,11 +172,9 @@ def main(args):
     lst_train, ndvi_train, lst_val, ndvi_val = process_data(args.datapath, n_cores=n_cores)
     lst_train, lst_val = lst_train.to(device), lst_val.to(device)
     ndvi_train, ndvi_val = ndvi_train.to(device), ndvi_val.to(device) 
-
-    return None 
     
     model = MRUNet(res_down=True, n_resblocks=1, bilinear=0).to(device)
-
+    
     # Load dataset and create data loader
     #transform = None
     #train_data = LOADDataset(lst_train, ndvi_train, transform=transform)
@@ -180,9 +182,10 @@ def main(args):
     
     batch_size = args.batch_size
     transform_augmentation_train = None
-    train_loader = DataLoaderCustom(lst_train, ndvi_train, batch_size=batch_size, shuffle=False)
-    val_loader = DataLoaderCustom(lst_val, ndvi_val, batch_size=batch_size)
-
+    train_loader = DataLoaderCustom(lst_train, ndvi_train)
+    val_loader = DataLoaderCustom(lst_val, ndvi_val)
+    train_data = train_loader
+    val_data = val_loader
     print('Length of training set: {} \n'.format(len(train_data)))
     print('Length of validating set: {} \n'.format(len(val_data)))
     print('Shape of input: ({},{}) \n'.format(lst_train.shape[-2],lst_train.shape[-1]))
@@ -225,8 +228,9 @@ def main(args):
 
     for epoch in range(last_epoch+1,epochs):
         print(f"Epoch {epoch + 1} of {epochs}")
-        train_epoch_loss, train_epoch_psnr, train_epoch_ssim = train(model, train_loader, optimizer, train_data, max_val)
-        val_epoch_loss, val_epoch_psnr, val_epoch_ssim = validate(model, val_loader, epoch, val_data, max_val)
+        max_val = 1
+        train_epoch_loss, train_epoch_psnr, train_epoch_ssim = train(model, train_loader, optimizer, train_data, max_val, batch_size, device)
+        val_epoch_loss, val_epoch_psnr, val_epoch_ssim = validate(model, val_loader, epoch, val_data, max_val, batch_size, device)
         print(f"Train loss: {train_epoch_loss:.6f}")
         print(f"Val loss: {val_epoch_loss:.6f}")
         train_loss.append(train_epoch_loss)
@@ -265,9 +269,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     main(args)
-
-
-
 
 
 
