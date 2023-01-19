@@ -29,12 +29,16 @@ class MixedGradientLoss():
         nvdi_img: NVDI gradient images at 250m         batchx1x254x254
         '''
         # Mean gradient error
-        MGE = torch.square(self.get_gradient(prediction) - nvdi_img).mean(dim=[1,2,3])
+        # MGE = torch.square(self.get_gradient(prediction) - nvdi_img).mean(dim=[1,2,3])
+        
+        # TODO remove this grdient COMMENT!!!
+        
         # Mean squared error [ 256 -> 64 (x4) ]
         MSE = torch.square(t_img- prediction).mean(dim=[1,2,3])
         # F.interpolate()
 
-        return MGE + self.alpha * MSE
+        #return MGE + self.alpha * MSE
+        return MSE
 
 
 '''
