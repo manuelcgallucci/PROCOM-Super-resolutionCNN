@@ -193,6 +193,18 @@ def process_data(path, train_size=0.75, n_cores=3):
     return lst_train, ndvi_train, lst_val, ndvi_val, original_lst_train, original_lst_val, original_lst, original_ndvi
 
 def main(args):
+    base_dir = './output/' + args.model_name + "/"
+    metrics_dir = base_dir + "metrics/"
+    samples_dir = base_dir + "samples/"
+    training_data_dir = base_dir + "training_data/"
+
+    if not os.path.exists(base_dir):
+        os.path.mkdirs(base_dir)
+        os.path.mkdirs(metrics_dir)
+        os.path.mkdirs(samples_dir)
+        os.path.mkdirs(training_data_dir)
+    
+    alpha = 0.01
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     if device != 'cuda':
@@ -232,10 +244,7 @@ def main(args):
 
     model = MRUNet(res_down=False, n_resblocks=1, bilinear=True).to(device)    
     optimizer = optim.Adam(model.parameters(), lr=lr)
-    loss = MixedGradientLoss(device)
-
-    if os.path.exists("Metrics") == False:
-        os.makedirs("Metrics")
+    loss = MixedGradientLoss(device, alpha=alpha)
 
     if not continue_train:
         # TRAINING CELL
@@ -251,7 +260,7 @@ def main(args):
 
     else:
         # Load the lists of last time training metrics
-        metrics = np.load(os.path.join("./Metrics",model_name + ".npy"))
+        metrics = np.load(os.path.join(metrics_dir, "metrics" + ".npy"))
         mge_train_loss, mge_val_loss = metrics[0].tolist(), metrics[5].tolist()
         mse_train_loss, mse_val_loss = metrics[1].tolist(), metrics[6].tolist()
         train_loss, val_loss = metrics[2].tolist(), metrics[7].tolist()
@@ -260,7 +269,7 @@ def main(args):
         start = time.time()
 
         # Model loading
-        checkpoint = torch.load(model_name)
+        checkpoint = torch.load(base_dir + args.model_name)
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         last_epoch = checkpoint['epoch']
@@ -281,7 +290,7 @@ def main(args):
     #plt.close()
     lst_list = (lst_train[test_img_idx:test_img_idx+5,0,:,:]).cpu().detach().numpy()
     ndvi_list = (ndvi_train[test_img_idx//2 : test_img_idx//2 +5,0,:,:]).cpu().detach().numpy()
-    np.savez_compressed('original_images',lst=lst_list, ndvi=ndvi_list,  lst_original = original_lst[test_img_idx:test_img_idx+5,:,:], ndvi_original = original_ndvi[test_img_idx//2 : test_img_idx//2 +5,:,:])
+    np.savez_compressed(training_data_dir + 'original_images',lst=lst_list, ndvi=ndvi_list,  lst_original = original_lst[test_img_idx:test_img_idx+5,:,:], ndvi_original = original_ndvi[test_img_idx//2 : test_img_idx//2 +5,:,:])
     
     for epoch in range(last_epoch+1,epochs):
         
@@ -301,7 +310,7 @@ def main(args):
             #plt.savefig('output_ep_{:d}.png'.format(epoch))
             #plt.close()
             print(np.shape(outputs))
-            np.savez_compressed('output_ep_{:d}'.format(epoch),outputs=outputs)
+            np.savez_compressed(training_data_dir + 'output_ep_{:d}'.format(epoch),outputs=outputs)
 
         print(f"\tMGE train loss: {train_epoch_mge:.6f}")
         print(f"\tMSE train loss: {train_epoch_mse:.6f}")
@@ -328,13 +337,14 @@ def main(args):
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'losses': [train_epoch_loss, train_epoch_psnr, train_epoch_ssim, val_epoch_loss, val_epoch_psnr, val_epoch_ssim],
-                }, model_name)
+                }, base_dir + model_name)
             
-            losses_path = os.path.join("./Metrics",model_name)
-            metrics = [mge_train_loss, mse_train_loss,train_loss,train_psnr,train_ssim,mge_val_loss,mse_val_loss,val_loss,val_psnr,val_ssim]
-            np.save(losses_path,metrics)
             best_validation_loss = val_epoch_loss
     
+    losses_path = os.path.join(metrics_dir,"losses")
+    metrics = [mge_train_loss, mse_train_loss,train_loss,train_psnr,train_ssim,mge_val_loss,mse_val_loss,val_loss,val_psnr,val_ssim]
+    np.save(losses_path,metrics)
+
     end = time.time()
     print(f"Finished training in: {((end-start)/60):.3f} minutes")
 
