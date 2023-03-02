@@ -40,7 +40,7 @@ class MixedGradientLoss():
         MSE = torch.square(t_img[:,:,8:57,8:57] - resize(prediction,(64,64),T.InterpolationMode.BICUBIC)[:,:,8:57,8:57]).mean(dim=[1,2,3])
         # F.interpolate()
 
-        return MGE, MSE, self.alpha * MGE + self.beta * MSE
+        return MGE, MSE, self.alpha * MGE + (1 - self.alpha) * MSE
 
 
 '''
