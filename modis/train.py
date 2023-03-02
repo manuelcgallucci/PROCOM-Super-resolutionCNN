@@ -197,14 +197,14 @@ def main(args):
     metrics_dir = base_dir + "metrics/"
     samples_dir = base_dir + "samples/"
     training_data_dir = base_dir + "training_data/"
-
-    if not os.path.exists(base_dir):
-        os.path.mkdirs(base_dir)
-        os.path.mkdirs(metrics_dir)
-        os.path.mkdirs(samples_dir)
-        os.path.mkdirs(training_data_dir)
     
-    alpha = 0.01
+    if not os.path.exists(base_dir):
+        os.mkdir(base_dir)
+        os.mkdir(metrics_dir)
+        os.mkdir(samples_dir)
+        os.mkdir(training_data_dir)
+    
+    alpha = 0.005
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     if device != 'cuda':
@@ -312,6 +312,11 @@ def main(args):
             print(np.shape(outputs))
             np.savez_compressed(training_data_dir + 'output_ep_{:d}'.format(epoch),outputs=outputs)
 
+            # Save metrics every nth iter
+            losses_path = os.path.join(metrics_dir,"metrics")
+            metrics = [mge_train_loss, mse_train_loss,train_loss,train_psnr,train_ssim,mge_val_loss,mse_val_loss,val_loss,val_psnr,val_ssim]
+            np.save(losses_path,metrics)
+
         print(f"\tMGE train loss: {train_epoch_mge:.6f}")
         print(f"\tMSE train loss: {train_epoch_mse:.6f}")
         print(f"\tTrain loss: {train_epoch_loss:.6f}")
@@ -341,7 +346,8 @@ def main(args):
             
             best_validation_loss = val_epoch_loss
     
-    losses_path = os.path.join(metrics_dir,"losses")
+    # Save metrics once again in the end 
+    losses_path = os.path.join(metrics_dir,"metrics")
     metrics = [mge_train_loss, mse_train_loss,train_loss,train_psnr,train_ssim,mge_val_loss,mse_val_loss,val_loss,val_psnr,val_ssim]
     np.save(losses_path,metrics)
 
