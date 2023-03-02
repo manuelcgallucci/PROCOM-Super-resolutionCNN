@@ -251,16 +251,16 @@ def main(MAX_CONSTANT):
 
     edge = 16
     n_imgs = 5
-    model_name = "xx"
-    #samples_dir = './output/'+ model_name +'/samples/'
-    #training_data_dir = './output/'+ model_name +'/training_data/'
-    #metrics_dir = './output/'+ model_name +'/metrics/'
-    samples_dir = './samples/'
-    training_data_dir = './'
-    metrics_dir = './Metrics/'
+    model_name = "test_a0-01"
+    samples_dir = './output/'+ model_name +'/samples/'
+    training_data_dir = './output/'+ model_name +'/training_data/'
+    metrics_dir = './output/'+ model_name +'/metrics/'
+    #samples_dir = './samples/'
+    #training_data_dir = './'
+    #metrics_dir = './Metrics/'
 
-    save_losses(metrics_dir + 'test_a0-01.npy', './')
-    return 
+    save_losses(metrics_dir + 'metrics.npy', metrics_dir)
+     
     out_epoch_file = training_data_dir + 'output_ep_{:d}.npz'.format(out_epoch)
     original_imgs_file = training_data_dir + 'original_images.npz'
     data = np.load(out_epoch_file)
@@ -292,7 +292,7 @@ def main(MAX_CONSTANT):
         plot_save(original_lst[i,:,:]* MAX_CONSTANT, "Orignal LST \n 64x64 1km", samples_dir + 'original_lst_'+str(i)+'.png')
         plot_save(original_ndvi[i,:,:], "Orignal NDVI \n 256x256 250m", samples_dir + 'original_ndvi_'+str(i)+'.png')
 
-        create_gif(i, edge, training_data_dir + 'output_ep_*.npz', samples_dir + 'out_seq'+str(i)+'.gif', MAX_CONSTANT)
+        # create_gif(i, edge, training_data_dir + 'output_ep_*.npz', samples_dir + 'out_seq'+str(i)+'.gif', MAX_CONSTANT)
 
         image = original_lst[i,:,:]
         up = cv2.resize(image, (256, 256), cv2.INTER_CUBIC)
