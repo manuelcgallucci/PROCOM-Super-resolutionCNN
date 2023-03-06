@@ -147,16 +147,17 @@ def create_gif(idx, edge, paths, output_path, MAX_CONSTANT, frame_in_ms = 400):
     for filename in file_list:
         # img = Image.open(filename)
         temp = re.findall(r'\d+', filename)
-        epoch = list(map(int, temp))[0]
+        epoch = list(map(int, temp))[-1]
 
         data = np.load(filename)
         lst_img = data['outputs']
         lst_img = lst_img[idx,0,:,:][edge:256-edge,edge:256-edge] * MAX_CONSTANT
         
-        plot_save(lst_img, 'Epoch: {:03d} \n edge: {:d}'.format(epoch, edge), './temp_{:03d}.png'.format(epoch))
+        plot_save(lst_img, 'LST 256x256 250m output. Epoch: {:03d} \n edge: {:d}'.format(epoch, edge), './temp_{:03d}.png'.format(epoch))
 
         img = Image.open('temp_{:03d}.png'.format(epoch))
         frames.append(img)
+        
         
     # gif_image = Image.new('RGB', (img.width, img.height))
     # gif_image.save(output_path, format='GIF', append_images=frames, save_all=True, duration=frame_in_ms, loop=0)
@@ -205,24 +206,27 @@ def plot_save(x, title, path):
     plt.savefig(path)
     plt.close()
 
-def save_losses(metrics_path, out_path, alpha=0.01, epochs=[x*5 for x in range(95)]):
-
+def save_losses(metrics_path, out_path, alpha=None, beta=None, epochs=None, first_n=0):
+    if alpha is None or epochs is None:
+        return 
+    
     data = np.load(metrics_path)
     # Values 
     # mge_train_loss, mse_train_loss,train_loss,train_psnr,train_ssim,mge_val_loss,mse_val_loss,val_loss,val_psnr,val_ssim
     mge_train_loss = data[0,:] * alpha
-    mse_train_loss = data[1,:]
+    mse_train_loss = data[1,:] * beta
     train_loss = data[2,:]
 
     mge_val_loss = data[5,:] * alpha
-    mse_val_loss = data[6,:]
+    mse_val_loss = data[6,:] * beta
     val_loss = data[7,:]
 
-    plt.plot(epochs, mge_train_loss, label="MGE Loss")
-    plt.plot(epochs, mse_train_loss, label="MSE Loss")
-    plt.plot(epochs, train_loss, label="Total Loss")
-    plt.xlabel("Epochs (saved every 5)")
-    plt.title("Train losses \n alpha:{:4.3f}".format(alpha))
+    
+    plt.plot(epochs[first_n:], mge_train_loss[first_n:], label="MGE Loss")
+    plt.plot(epochs[first_n:], mse_train_loss[first_n:], label="MSE Loss")
+    plt.plot(epochs[first_n:], train_loss[first_n:], label="Total Loss")
+    plt.xlabel("Epochs")
+    plt.title("Train losses \n alpha:{:4.3f} beta:{:4.3f}".format(alpha, beta))
     plt.legend(loc="best")
     plt.savefig(out_path + "loss_train.png")
     plt.close()
@@ -230,7 +234,7 @@ def save_losses(metrics_path, out_path, alpha=0.01, epochs=[x*5 for x in range(9
     plt.plot(epochs, mge_val_loss, label="MGE Loss")
     plt.plot(epochs, mse_val_loss, label="MSE Loss")
     plt.plot(epochs, val_loss, label="Total Loss")
-    plt.xlabel("Epochs (saved every 5)")
+    plt.xlabel("Epochs")
     plt.title("Validation losses \n alpha:{:4.3f}".format(alpha))
     plt.legend(loc="best")
     plt.savefig(out_path + "loss_val.png")
@@ -238,20 +242,22 @@ def save_losses(metrics_path, out_path, alpha=0.01, epochs=[x*5 for x in range(9
 
     plt.plot(epochs, train_loss, label="Train")
     plt.plot(epochs, val_loss, label="Validation")
-    plt.xlabel("Epochs (saved every 5)")
+    plt.xlabel("Epochs")
     plt.title("Loss comparison \n alpha:{:4.3f}".format(alpha))
     plt.legend(loc="best")
     plt.savefig(out_path + "loss_both.png")
     plt.close()
 
 
-def main(MAX_CONSTANT):
+def main(MAX_CONSTANT, alpha=0.0001, beta=0.9999, epochs=150):
     
-    out_epoch = 295
+    out_epoch = 5
+    model_name = "newBeta0-9999"
+
 
     edge = 16
     n_imgs = 5
-    model_name = "test_a0-01"
+
     samples_dir = './output/'+ model_name +'/samples/'
     training_data_dir = './output/'+ model_name +'/training_data/'
     metrics_dir = './output/'+ model_name +'/metrics/'
@@ -259,7 +265,7 @@ def main(MAX_CONSTANT):
     #training_data_dir = './'
     #metrics_dir = './Metrics/'
 
-    save_losses(metrics_dir + 'metrics.npy', metrics_dir)
+    # save_losses(metrics_dir + 'metrics.npy', metrics_dir, alpha=alpha, beta=beta, epochs=[i for i in range(1,epochs+1)])
      
     out_epoch_file = training_data_dir + 'output_ep_{:d}.npz'.format(out_epoch)
     original_imgs_file = training_data_dir + 'original_images.npz'
@@ -279,14 +285,14 @@ def main(MAX_CONSTANT):
     # print(np.shape(original_ndvi))
 
     for i in range(n_imgs):
-        output_image = outputs[i,0,:,:][edge:256-edge,edge:256-edge] * MAX_CONSTANT
-
+        output_image = outputs[i,0,:,:]
+        output_image = output_image[edge:256-edge,edge:256-edge] * MAX_CONSTANT
         # save_histogram(output_image, './samples/hist_output_'+str(i)+'.png', "Histogram \n from: Output LST 256x256 250m", n_bins=20)
         # save_histogram(original_lst[i,:,:]* MAX_CONSTANT, './samples/hist_original_lst_'+str(i)+'.png', "Histogram \n from: Original LST 64x64 250m", n_bins=20)
 
-        save_double_histograms(output_image, original_lst[i,:,:]* MAX_CONSTANT, "Output LST 256x256 1km", "Real LST 64x64 250m", './samples/hist_comp_'+str(i)+'.png', "Histogram comparison")
+        save_double_histograms(output_image, original_lst[i,:,:]* MAX_CONSTANT, "Output LST 256x256 1km", "Real LST 64x64 250m", samples_dir + 'hist_comp_'+str(i)+'.png', "Histogram comparison")
 
-        plot_save(output_image, "Model Output LST \n 256x256 250m", samples_dir + 'output_'+str(i)+'.png')
+        plot_save(output_image, "Model Output LST \n 256x256 250m edge:{:d}".format(edge), samples_dir + 'output_'+str(i)+'.png')
         plot_save(lst[i,:,:], "Interpolated Bicubic LST \n 256x256 1km", samples_dir + 'lst_'+str(i)+'.png')
         plot_save(ndvi[i,:,:], "Normalized NVDI Gradient \n (from: 256x256 250m)", samples_dir + 'ndvi_'+str(i)+'.png')
         plot_save(original_lst[i,:,:]* MAX_CONSTANT, "Orignal LST \n 64x64 1km", samples_dir + 'original_lst_'+str(i)+'.png')
