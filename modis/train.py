@@ -192,6 +192,20 @@ def process_data(path, train_size=0.75, n_cores=3):
     
     return lst_train, ndvi_train, lst_val, ndvi_val, original_lst_train, original_lst_val, original_lst, original_ndvi
 
+# Creates metadata txt file
+def create_meta(dir, args):
+    writable_dict = {
+        "alpha": args.alpha,
+        "beta": args.beta,
+        "epochs": args.epochs, 
+        "lr": args.lr,
+        "batch_size": args.batch_size,
+        "model_name": args.model_name
+    }
+    with open(os.path.join(dir, "meta.txt"), 'w') as f:
+        for k,v in writable_dict.items():
+            f.write("{:s}: ".format(k) + str(v) + "\n")
+
 def main(args):
     base_dir = './output/' + args.model_name + "/"
     metrics_dir = base_dir + "metrics/"
@@ -203,8 +217,10 @@ def main(args):
         os.mkdir(metrics_dir)
         os.mkdir(samples_dir)
         os.mkdir(training_data_dir)
-    
-    alpha = 0.005
+        create_meta(base_dir, args)
+    else:
+        print("Folder already exists. Stopped training to prevent overwrite.")
+        return None
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     if device != 'cuda':
@@ -236,7 +252,9 @@ def main(args):
     #print('Length of validating set: {}'.format(len(val_loader)))
     print('\tShape of LST input: ({},{})'.format(lst_train.shape[-2],lst_train.shape[-1]))
     print('\tShape of NVDI gradient input: ({},{})'.format(ndvi_train.shape[-2],ndvi_train.shape[-1]))
-    
+
+    alpha = args.alpha 
+    beta = args.beta
     epochs = args.epochs
     lr = args.lr
     model_name = args.model_name
@@ -244,7 +262,7 @@ def main(args):
 
     model = MRUNet(res_down=False, n_resblocks=1, bilinear=True).to(device)    
     optimizer = optim.Adam(model.parameters(), lr=lr)
-    loss = MixedGradientLoss(device, alpha=alpha)
+    loss = MixedGradientLoss(device, alpha=alpha, beta=beta)
 
     if not continue_train:
         # TRAINING CELL
@@ -360,9 +378,13 @@ if __name__ == '__main__':
     parser.add_argument('--datapath', help='path to directory containing training tif data')
     
     parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
-    parser.add_argument('--epochs', default=300, type=int, help='number of epochs')
+    parser.add_argument('--epochs', default=150, type=int, help='number of epochs')
     parser.add_argument('--batch_size', default=4, type=int, help='size of batch')
     parser.add_argument('--model_name', type=str, help='name of the model')
+    
+    parser.add_argument('--alpha', default=0.0001, type=float, help='Weight of MGE in loss')
+    parser.add_argument('--beta', default=0.9999, type=float, help='Weight of MSE in loss')
+    
     parser.add_argument('--continue_train', choices=['True', 'False'], default='False', type=str, 
                         help="flag for continue training, if True - continue training the 'model_name' model, else - training from scratch")
     args = parser.parse_args()
