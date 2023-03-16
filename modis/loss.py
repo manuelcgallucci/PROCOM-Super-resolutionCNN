@@ -10,7 +10,7 @@ class MixedGradientLoss():
         # Kernels defined for the gradient
         self.kernel_x = [[-1., 0., 1.], [-2., 0., 2.], [-1., 0., 1.]]
         self.kernel_x = torch.FloatTensor(self.kernel_x).unsqueeze(0).unsqueeze(0).to(device)
-        self.kernel_y = [[-1., -2., 1.], [0., 0., 0.], [1., 2., 1.]]
+        self.kernel_y = [[-1., -2., -1.], [0., 0., 0.], [1., 2., 1.]]
         self.kernel_y = torch.FloatTensor(self.kernel_y).unsqueeze(0).unsqueeze(0).to(device)
 
         # Parameters of the loss function
@@ -18,14 +18,15 @@ class MixedGradientLoss():
         self.beta = beta
 
 
-    def get_gradient(self, img):
-        epsilon = 10e-5
+    def get_gradient(self, img, epsilon = 10e-5):
         # Compute the gradient for an image using the sobel operator  
-        # Orginially: torch.sqrt(torch.square(F.conv2d(img, self.kernel_x, padding=0)) + torch.square(F.conv2d(img, self.kernel_y, padding=0)))
-        # Removed sqrt as the backwards loss call gave an error 
-        # return torch.square(F.conv2d(img, self.kernel_x, padding=0)) + torch.square(F.conv2d(img, self.kernel_y, padding=0))
         gradient = torch.sqrt(torch.square(F.conv2d(img, self.kernel_x, padding=0)) + torch.square(F.conv2d(img, self.kernel_y, padding=0)) +epsilon)
         return gradient/torch.max(gradient)
+
+    def get_gradient_nonNormalized(self, img, epsilon = 10e-5):
+        # Compute the gradient for an image using the sobel operator  
+        gradient = torch.sqrt(torch.square(F.conv2d(img, self.kernel_x, padding=0)) + torch.square(F.conv2d(img, self.kernel_y, padding=0)) +epsilon)
+        return gradient, torch.max(gradient)
 
 
     def get_loss(self, prediction, t_img, nvdi_img):
