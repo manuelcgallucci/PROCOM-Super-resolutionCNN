@@ -199,8 +199,11 @@ def save_double_histograms(x, y, labelx, labely, out_path, title, n_bins=20):
     plt.savefig(out_path)
     plt.close()
 
-def plot_save(x, title, path):
-    plt.imshow(x)
+def plot_save(x, title, path, colorbar=None):
+    if colorbar is None:
+        plt.imshow(x)
+    else:
+        plt.imshow(x, vmin=colorbar[0], vmax=colorbar[1])
     plt.colorbar()
     plt.title(title)
     plt.savefig(path)
@@ -221,6 +224,8 @@ def save_losses(metrics_path, out_path, alpha=None, beta=None, epochs=None, firs
     mse_val_loss = data[6,:] * beta
     val_loss = data[7,:]
 
+    max_epoch = train_loss.shape[0]
+    epochs = [i for i in range(1,max_epoch+1)]
     
     plt.plot(epochs[first_n:], mge_train_loss[first_n:], label="MGE Loss")
     plt.plot(epochs[first_n:], mse_train_loss[first_n:], label="MSE Loss")
@@ -249,12 +254,11 @@ def save_losses(metrics_path, out_path, alpha=None, beta=None, epochs=None, firs
     plt.close()
 
 
-def main(MAX_CONSTANT, alpha=0.0001, beta=0.9999, epochs=150):
+def main(MAX_CONSTANT, alpha=0.5, beta=0.5, epochs=1):
     
-    out_epoch = 5
-    model_name = "newBeta0-9999"
-
-
+    out_epoch = 120
+    model_name = "test_loss2"
+    colorbar=None #[270,310]
     edge = 16
     n_imgs = 5
 
@@ -265,7 +269,7 @@ def main(MAX_CONSTANT, alpha=0.0001, beta=0.9999, epochs=150):
     #training_data_dir = './'
     #metrics_dir = './Metrics/'
 
-    # save_losses(metrics_dir + 'metrics.npy', metrics_dir, alpha=alpha, beta=beta, epochs=[i for i in range(1,epochs+1)])
+    save_losses(metrics_dir + 'metrics.npy', metrics_dir, alpha=alpha, beta=beta, epochs=[i for i in range(1,epochs+1)])
      
     out_epoch_file = training_data_dir + 'output_ep_{:d}.npz'.format(out_epoch)
     original_imgs_file = training_data_dir + 'original_images.npz'
@@ -283,7 +287,7 @@ def main(MAX_CONSTANT, alpha=0.0001, beta=0.9999, epochs=150):
     # print(np.shape(ndvi))
     # print(np.shape(original_lst))
     # print(np.shape(original_ndvi))
-
+    
     for i in range(n_imgs):
         output_image = outputs[i,0,:,:]
         output_image = output_image[edge:256-edge,edge:256-edge] * MAX_CONSTANT
@@ -291,11 +295,11 @@ def main(MAX_CONSTANT, alpha=0.0001, beta=0.9999, epochs=150):
         # save_histogram(original_lst[i,:,:]* MAX_CONSTANT, './samples/hist_original_lst_'+str(i)+'.png', "Histogram \n from: Original LST 64x64 250m", n_bins=20)
 
         save_double_histograms(output_image, original_lst[i,:,:]* MAX_CONSTANT, "Output LST 256x256 1km", "Real LST 64x64 250m", samples_dir + 'hist_comp_'+str(i)+'.png', "Histogram comparison")
-
-        plot_save(output_image, "Model Output LST \n 256x256 250m edge:{:d}".format(edge), samples_dir + 'output_'+str(i)+'.png')
-        plot_save(lst[i,:,:], "Interpolated Bicubic LST \n 256x256 1km", samples_dir + 'lst_'+str(i)+'.png')
+        
+        plot_save(output_image, "Model Output LST \n 256x256 250m edge:{:d}".format(edge), samples_dir + 'output_'+str(i)+'.png', colorbar=colorbar)
+        plot_save(lst[i,:,:] * MAX_CONSTANT, "Interpolated Bicubic LST \n 256x256 1km", samples_dir + 'lst_'+str(i)+'.png', colorbar=colorbar)
         plot_save(ndvi[i,:,:], "Normalized NVDI Gradient \n (from: 256x256 250m)", samples_dir + 'ndvi_'+str(i)+'.png')
-        plot_save(original_lst[i,:,:]* MAX_CONSTANT, "Orignal LST \n 64x64 1km", samples_dir + 'original_lst_'+str(i)+'.png')
+        plot_save(original_lst[i,:,:]* MAX_CONSTANT, "Orignal LST \n 64x64 1km", samples_dir + 'original_lst_'+str(i)+'.png', colorbar=colorbar)
         plot_save(original_ndvi[i,:,:], "Orignal NDVI \n 256x256 250m", samples_dir + 'original_ndvi_'+str(i)+'.png')
 
         # create_gif(i, edge, training_data_dir + 'output_ep_*.npz', samples_dir + 'out_seq'+str(i)+'.gif', MAX_CONSTANT)

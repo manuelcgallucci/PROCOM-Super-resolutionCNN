@@ -19,7 +19,7 @@ from loss import MixedGradientLoss
 from utility import *
 from dataloader import DatasetCustom
 
-# nohup python3 train.py --datapath ./data/final_database.npz --model_name test_v1 &
+# nohup python3 train.py --datapath ./data/final_database.npz --model_name test_v1 --epochs 150 --alpha 0.01 -beta 0.99 &
 
 def run_model(model, dataloader, optimizer, loss, batch_size, device, phase=None):
     if phase == "train":
@@ -310,8 +310,13 @@ def main(args):
     ndvi_list = (ndvi_train[test_img_idx//2 : test_img_idx//2 +5,0,:,:]).cpu().detach().numpy()
     np.savez_compressed(training_data_dir + 'original_images',lst=lst_list, ndvi=ndvi_list,  lst_original = original_lst[test_img_idx:test_img_idx+5,:,:], ndvi_original = original_ndvi[test_img_idx//2 : test_img_idx//2 +5,:,:])
     
+    switch = True
     for epoch in range(last_epoch+1,epochs):
-        
+        if (epoch > epochs/2) and switch:
+            loss.alpha = beta
+            loss.beta = alpha 
+            switch = False
+
         print(f"Epoch {epoch + 1} of {epochs}")
 
         train_epoch_mge, train_epoch_mse, train_epoch_loss, train_epoch_psnr, train_epoch_ssim = run_model(model, train_loader, optimizer, loss, batch_size, device, phase="train")
