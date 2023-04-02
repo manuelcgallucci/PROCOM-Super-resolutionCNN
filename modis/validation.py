@@ -7,6 +7,8 @@ from skimage.metrics import peak_signal_noise_ratio
 from skimage.metrics import structural_similarity as ssim_sk
 import cv2
 from loss import MixedGradientLoss
+import argparse
+
 
 def plot_save(x, title, path, limits=None):
     if limits is None:
@@ -209,8 +211,13 @@ def calculate_metrics_devided(cropped_aster, cropped_output_lst, cropped_aatprk,
 		print("\t"+name+" SSIM", np.mean(metrics[m]), np.max(metrics[m]), np.min(metrics[m]))
 
 	
-def main(model_name="test_loss3", max_val=333.3200048828125 ,data_dir="./data/", base_dir="./validation/"):
-    
+def main(args):
+
+	model_name = args.model_name
+	max_val = args.max_val
+	data_dir = args.data_dir
+	base_dir = args.base_dir
+
 	# Limit for the color bars in the plot. To keep them all the same range
 	colorbar_limits = (260, 280)
 
@@ -304,4 +311,14 @@ def main(model_name="test_loss3", max_val=333.3200048828125 ,data_dir="./data/",
 
 
 if __name__ == "__main__":
-    main()
+    
+    parser = argparse.ArgumentParser(description="PyTorch MR UNet validation script",
+                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--model_name', type=str, help='Model name as saved in outputs folder')
+    parser.add_argument('--max_val', default=333.3200048828125, type=float, help='Maximum LST value found during normalization')
+    parser.add_argument('--data_dir', default="./data/", type=str, help='Data directory with all the images')
+    parser.add_argument('--base_dir', default="./validation/", type=str, help='Output dir to place all plots')
+
+    args = parser.parse_args()
+
+    main(args)
