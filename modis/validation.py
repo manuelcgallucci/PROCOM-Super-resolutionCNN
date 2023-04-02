@@ -221,9 +221,9 @@ def main(args):
 	# Limit for the color bars in the plot. To keep them all the same range
 	colorbar_limits = (260, 280)
 
-	aster_img = np.load(data_dir+"aster_final.npy") # Nothing changed
-	lst_img = np.load(data_dir+"lst_final.npy") # 0 interpolated
-	ndvi_img = np.load(data_dir+"ndvi250final.npy") # 0 replaced by 260
+	aster_img = np.load(data_dir+"aster1km.npy") # Nothing changed
+	lst_img = np.load(data_dir+"lst1km.npy") # 0 interpolated
+	ndvi_img = np.load(data_dir+"ndvi250m.npy") # 0 replaced by 260
 
 	# Plot the originial images
 	#plot_save(aster_img, "Aster image", base_dir+"crop_aster.png") # Has 0 and NaN in the border 
