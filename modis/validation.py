@@ -209,32 +209,31 @@ def calculate_metrics_devided(cropped_aster, cropped_output_lst, cropped_aatprk,
 		print("\t"+name+" SSIM", np.mean(metrics[m]), np.max(metrics[m]), np.min(metrics[m]))
 
 	
-def main():
+def main(model_name="test_loss3", max_val=333.3200048828125 ,data_dir="./data/", base_dir="./validation/"):
     
-	model_name = "test_loss3" # "newBeta0-9999" "test_loss3"
-
-	max_val = 333.3200048828125
+	# Limit for the color bars in the plot. To keep them all the same range
 	colorbar_limits = (260, 280)
-	data_dir = "./data/"
-
-	base_dir = "./validation/" # Dir to plot the images
 
 	aster_img = np.load(data_dir+"aster_final.npy") # Nothing changed
 	lst_img = np.load(data_dir+"lst_final.npy") # 0 interpolated
 	ndvi_img = np.load(data_dir+"ndvi250final.npy") # 0 replaced by 260
 
+	# Plot the originial images
 	#plot_save(aster_img, "Aster image", base_dir+"crop_aster.png") # Has 0 and NaN in the border 
 	#plot_save(lst_img, "LST image", base_dir+"crop_lst.png") # Has 0 in the border and inside 
 	#plot_save(ndvi_img, "NDVI image", base_dir+"crop_ndvi.png") # Has 0 in the border
 
+	# See the 0 and NaNs in the arrays 
 	#analyze_arr(aster_img, "Aster image")
 	#analyze_arr(lst_img, "LST image")
 	#analyze_arr(ndvi_img, "NDVI image")
 
+	# Interpolate the values, this is only useful for some 0 and NaNs found inside the image, not for the big border around the image
 	interpolated_aster = interpolate_nan_and_zeros(aster_img, verbose=False)
 	interpolated_lst = interpolate_nan_and_zeros(lst_img, verbose=False)
 	interpolated_ndvi = interpolate_nan_and_zeros(ndvi_img, verbose=False)
 
+	# Generate the bilinear LST as a baseline
 	biliear_lst = cv2.resize(interpolated_lst, (256, 256), cv2.INTER_CUBIC)
 
 	print("PSNR bilinear:", psnr_notorch(interpolated_aster, biliear_lst))
@@ -247,23 +246,18 @@ def main():
 	plot_save(biliear_lst, "Bilinear image", base_dir+"final_binlinear.png", limits=colorbar_limits) # Has 0 and NaN in the border 
 	plot_save(cropped_bilinear, "Bilinear image without edges", base_dir+"final_binlinear_edge.png", limits=colorbar_limits) # Has 0 and NaN in the border 
 
-
 	plot_save(interpolated_aster, "Interpolated Aster image", base_dir+"interpolated_aster.png") 
 	plot_save(interpolated_lst, "Interpolated LST image", base_dir+"interpolated_lst.png") 
 	plot_save(interpolated_ndvi, "Interpolated NDVI image", base_dir+"interpolated_ndvi.png") 
 
 	# Use the interpolated LST and NDVI to generate the output of the image
 	### ================================== ###
-
-	#lst_size = interpolated_lst.shape
-
 	device = 'cuda' if torch.cuda.is_available() else 'cpu'
 	if device != "cuda":
-		 output_lst = np.zeros((256,256))
-
+		print("No device available. Stopping the program. device:", device)
+		return 
 	else:
 		print("GPU not accesible not running the model output is not correct")
-
 
 		loss = MixedGradientLoss(device=device)
 
@@ -281,9 +275,7 @@ def main():
 		output_lst = output_lst[0,0,:,:]
 		np.save("model_output", output_lst)
 
-	# plot_save(output_lst, "Output LST image", base_dir+"output.png")
-
-	# Crop the images to calculate the PSNR since there are soem border problems 
+	# Crop the images to calculate the PSNR since because of the edge effects 
 	cropped_output_lst = output_lst[16:-16,16:-16]
 	cropped_aster = aster_img[16:-16,16:-16]
 
@@ -291,48 +283,24 @@ def main():
 	# plot_save(cropped_aster, "Aster cropped LST image", base_dir+"final_aster.png", limits=colorbar_limits)
 	cropped_aatprk, cropped_atprk, cropped_tsharp = plot_other_methods(limits=colorbar_limits)
 
-	# psnr 22 qqch take away the last one since the images were cropped using 16:241 instead of 16:240 TODO fix thisss
-	cropped_aatprk = cropped_aatprk
-	cropped_atprk = cropped_atprk
-	cropped_tsharp = cropped_tsharp
+	# crop the original method images to compare them with the model results
+	cropped_aatprk = cropped_aatprk[16:-16,16:-16]
+	cropped_atprk = cropped_atprk[16:-16,16:-16]
+	cropped_tsharp = cropped_tsharp[16:-16,16:-16]
 
+	# Save the histograms
 	# save_double_histograms(cropped_aster, cropped_output_lst, "ASTER", "LST output", "./", "hist_lst.png")
 	# save_double_histograms(cropped_aster, cropped_aatprk, "ASTER", "AATPRK", "./", "hist_aatprk.png")
 	# save_double_histograms(cropped_aster, cropped_atprk, "ASTER", "ATPRK", "./", "hist_atprk.png")
 	# save_double_histograms(cropped_aster, cropped_tsharp, "ASTER", "TSharp", "./", "hist_tsharp.png")
 
-    # grad, max_grad = loss.get_gradient_nonNormalized(torch.Tensor(cropped_output_lst[None, :,:]).to(device))
-
-    # plot_save(grad.detach().cpu()[0,:,:], "LST output gradient", base_dir+"grad_output_lst.png")
-    # plot_save((grad/max_grad).detach().cpu()[0,:,:], "LST output gradient normalized", base_dir+"grad_output_lst_normalized.png")
-
-    # grad, max_grad = loss.get_gradient_nonNormalized(torch.Tensor(interpolated_ndvi[None, :,:]).to(device))
-
-    # plot_save(grad.detach().cpu()[0,:,:], "NDVI gradient", base_dir+"grad_output_ndvi.png")
-    # plot_save((grad/max_grad).detach().cpu()[0,:,:], "NDVI gradient normalized", base_dir+"grad_output_ndvi_normalized.png")
-
-    # grad, max_grad = loss.get_gradient_nonNormalized(torch.Tensor(cropped_aster[None, :,:]).to(device))
-
-    # plot_save(grad.detach().cpu()[0,:,:], "ASTER gradient", base_dir+"grad_aster_gt.png")
-    # plot_save((grad/max_grad).detach().cpu()[0,:,:], "ASTER gradient normalized", base_dir+"grad_aster_gt_normalized.png")
-        
-
-	print(cropped_aster.shape)
-	print(cropped_output_lst.shape) 
-	print(cropped_aatprk.shape) 
-	print(cropped_atprk.shape) 
-	print(cropped_tsharp.shape) 
-	cropped_aatprk = cropped_aatprk[16:-16,16:-16]
-	cropped_atprk = cropped_atprk[16:-16,16:-16]
-	cropped_tsharp = cropped_tsharp[16:-16,16:-16]
-
+	# Print the metrics (psnr and ssmi for the images)
 	calculate_metrics(cropped_aster, cropped_output_lst, cropped_aatprk, cropped_atprk, cropped_tsharp)
 
-	for division in range(2,5):
-		print("Division: ", division)
-		calculate_metrics_devided(cropped_aster, cropped_output_lst, cropped_aatprk, cropped_atprk, cropped_tsharp, cropped_bilinear, division=division)
-
-
+	# Print the metrics but subdivide the images into smaller sections
+	# for division in range(2,5):
+	# 	print("Division: ", division)
+	# 	calculate_metrics_devided(cropped_aster, cropped_output_lst, cropped_aatprk, cropped_atprk, cropped_tsharp, cropped_bilinear, division=division)
 
 
 if __name__ == "__main__":
